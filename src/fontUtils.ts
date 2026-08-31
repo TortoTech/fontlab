@@ -1,0 +1,169 @@
+import type { CustomFont, FontPair, Settings } from './types'
+
+const injected = new Map<string, HTMLElement>()
+
+export function fontAvailable(name: string): boolean {
+  try {
+    return document.fonts.check(`16px "${name}"`)
+  } catch {
+    return false
+  }
+}
+
+const quote = (name: string) => `"${name}"`
+
+export function headingStack(pair: FontPair): string {
+  return [pair.latin, pair.headingZh].filter(Boolean).map(quote).join(', ') + ', serif'
+}
+
+export function bodyStack(pair: FontPair): string {
+  return [pair.latin, pair.bodyZh].filter(Boolean).map(quote).join(', ') + ', sans-serif'
+}
+
+export function monoStack(pair: FontPair): string {
+  return pair.mono ? `${quote(pair.mono)}, monospace` : 'monospace'
+}
+
+export function buildCssSnippet(pair: FontPair, settings: Settings): string {
+  return `/* ${pair.name} */
+h1, h2 {
+  font-family: ${headingStack(pair)};
+  font-weight: ${pair.headingWeight};
+}
+
+body {
+  font-family: ${bodyStack(pair)};
+  font-weight: ${pair.bodyWeight};
+  line-height: ${settings.lineHeight};
+  letter-spacing: ${settings.letterSpacing}em;
+}
+
+code, pre {
+  font-family: ${monoStack(pair)};
+}`
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    ta.remove()
+    return ok
+  }
+}
+
+export async function loadFontResource(font: CustomFont): Promise<void> {
+  injected.get(font.name)?.remove()
+  if (font.kind === 'link' && font.href) {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = font.href
+    document.head.appendChild(link)
+    injected.set(font.name, link)
+    await new Promise<void>((resolve, reject) => {
+      link.onload = () => resolve()
+      link.onerror = () => {
+        link.remove()
+        injected.delete(font.name)
+        reject(new Error('链接加载失败，请检查 URL 是否可访问'))
+      }
+    })
+  } else if (font.css) {
+    const style = document.createElement('style')
+    style.textContent = font.css
+    document.head.appendChild(style)
+    injected.set(font.name, style)
+  } else {
+    throw new Error('缺少字体资源内容')
+  }
+  await document.fonts.ready
+}
+
+export function restoreFont(font: CustomFont): void {
+  loadFontResource(font).catch(() => {})
+}
+
+export function removeInjectedFont(name: string): void {
+  injected.get(name)?.remove()
+  injected.delete(name)
+}
+
+const googleLinks = new Map<string, HTMLLinkElement>()
+const pendingGoogle = new Map<string, Promise<void>>()
+
+export function googleFontsUrl(query: string): string {
+  return `https://fonts.googleapis.com/css2?family=${query}&display=swap`
+}
+
+export async function loadGoogleFont(family: string, query: string): Promise<void> {
+  if (fontAvailable(family) || googleLinks.has(family)) return
+  const existing = pendingGoogle.get(family)
+  if (existing) return existing
+
+  const promise = (async () => {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = googleFontsUrl(query)
+    document.head.appendChild(link)
+    try {
+      await new Promise<void>((resolve, reject) => {
+        link.onload = () => resolve()
+        link.onerror = () =>
+          reject(new Error('无法连接 Google Fonts（网络或地区限制），可改用「添加网络字体」自行托管'))
+      })
+      googleLinks.set(family, link)
+      await document.fonts.ready
+    } catch (err) {
+      link.remove()
+      throw err
+    } finally {
+      pendingGoogle.delete(family)
+    }
+  })()
+  pendingGoogle.set(family, promise)
+  return promise
+}
+
+export function guessFamilyFromUrl(url: string): string {
+  const m = url.match(/[?&]family=([^&:]+)/)
+  return m ? decodeURIComponent(m[1]).replace(/\+/g, ' ') : ''
+}
+
+export function parseFamilyFromCss(css: string): string {
+  const m = css.match(/font-family\s*:\s*["']?([^;"'}]+)/i)
+  return m ? m[1].trim() : ''
+}
+
+export function bufToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  let bin = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(bin)
+}
+
+export function guessMime(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase()
+  switch (ext) {
+    case 'woff':
+      return 'font/woff'
+    case 'woff2':
+      return 'font/woff2'
+    case 'ttf':
+      return 'font/ttf'
+    case 'otf':
+      return 'font/otf'
+    default:
+      return 'font/woff2'
+  }
+}
