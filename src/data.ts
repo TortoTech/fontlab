@@ -1,4 +1,4 @@
-import type { FontPair, Sample, SampleKey, Settings } from './types'
+import type { CustomFont, FontPair, FontSource, Sample, SampleKey, Settings } from './types'
 
 export const FONT_GROUPS: { label: string; fonts: string[] }[] = [
   {
@@ -148,6 +148,23 @@ export const GOOGLE_FONT_GROUPS: { label: string; fonts: GoogleFont[] }[] = [
 export const GOOGLE_FONT_MAP: Map<string, string> = new Map(
   GOOGLE_FONT_GROUPS.flatMap((g) => g.fonts.map((f) => [f.family, f.query] as [string, string])),
 )
+
+export interface FontEntry {
+  family: string
+  source: FontSource
+}
+
+export function allFontEntries(customFonts: CustomFont[]): FontEntry[] {
+  const map = new Map<string, FontEntry>()
+  FONT_GROUPS.forEach((g) =>
+    g.fonts.forEach((f) => {
+      if (!map.has(f)) map.set(f, { family: f, source: 'local' })
+    }),
+  )
+  GOOGLE_FONT_GROUPS.forEach((g) => g.fonts.forEach((f) => map.set(f.family, { family: f.family, source: 'google' })))
+  customFonts.forEach((c) => map.set(c.name, { family: c.name, source: 'custom' }))
+  return [...map.values()]
+}
 
 export const WEIGHTS: { value: number; label: string }[] = [
   { value: 100, label: 'Thin 100' },

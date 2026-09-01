@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { HashRouter, Route, Routes } from 'react-router-dom'
+import CompareView from './components/CompareView'
+import FeatureMatrix from './components/FeatureMatrix'
 import FontModal from './components/FontModal'
-import PairCard from './components/PairCard'
-import Toolbar from './components/Toolbar'
 import TopBar from './components/TopBar'
-import { DEFAULT_SETTINGS, GOOGLE_FONT_MAP, defaultPairs, getSample, uid } from './data'
+import { DEFAULT_SETTINGS, GOOGLE_FONT_MAP, defaultPairs, uid } from './data'
+import type { FontFeatureResult } from './detect'
 import { fontAvailable, loadFontResource, loadGoogleFont, removeInjectedFont, restoreFont } from './fontUtils'
 import type { CustomFont, FontPair, Settings } from './types'
 
@@ -13,11 +15,11 @@ interface AppState {
   customFonts: CustomFont[]
 }
 
-const STORAGE_KEY = 'font-compare-v1'
+const STORAGE_KEY = 'fontlab-v1'
 
 function loadState(): AppState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('font-compare-v1')
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<AppState>
       return {
@@ -40,7 +42,6 @@ export default function App() {
   const googleTried = useRef(new Set<string>())
 
   const { settings, pairs, customFonts } = state
-  const sample = getSample(settings)
 
   const ensureGoogleFont = async (family: string, opts?: { force?: boolean; silent?: boolean }) => {
     const query = GOOGLE_FONT_MAP.get(family)
@@ -132,8 +133,7 @@ export default function App() {
       return { ...s, pairs: next }
     })
 
-  const deletePair = (id: string) =>
-    setState((s) => ({ ...s, pairs: s.pairs.filter((p) => p.id !== id) }))
+  const deletePair = (id: string) => setState((s) => ({ ...s, pairs: s.pairs.filter((p) => p.id !== id) }))
 
   const addFont = async (font: CustomFont) => {
     await loadFontResource(font)
@@ -156,76 +156,93 @@ export default function App() {
     location.reload()
   }
 
-  const gridCls =
-    settings.view === 'grid' ? 'grid grid-cols-1 gap-4 xl:grid-cols-2' : 'flex flex-col gap-4'
+  const loadGoogleForMatrix = async (family: string): Promise<boolean> => {
+    const query = GOOGLE_FONT_MAP.get(family)
+    if (!query) return false
+    try {
+      await loadGoogleFont(family, query)
+      googleTried.current.delete(family)
+      setFontTick((t) => t + 1)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const useFontInCompare = (r: FontFeatureResult) => {
+    setState((s) => ({
+      ...s,
+      pairs: [
+        ...s.pairs,
+        {
+          id: uid(),
+          name: r.family,
+          headingZh: r.family,
+          bodyZh: r.family,
+          latin: '',
+          mono: r.monospace === 'yes' ? r.family : '',
+          headingWeight: 700,
+          bodyWeight: 400,
+        },
+      ],
+    }))
+    setToast(`已添加组合「${r.family}」`)
+  }
 
   return (
-    <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <TopBar onAddPair={addPair} onAddFont={() => setModalOpen(true)} onReset={reset} />
+    <HashRouter>
+      <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+        <TopBar onAddFont={() => setModalOpen(true)} onReset={reset} />
 
-      <div className="mx-auto max-w-[1600px] px-4 py-4">
-        <Toolbar settings={settings} onChange={patchSettings} />
+        <div className="mx-auto max-w-[1600px] px-4 py-4">
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <CompareView
+                  settings={settings}
+                  pairs={pairs}
+                  customFonts={customFonts}
+                  fontTick={fontTick}
+                  onPatchSettings={patchSettings}
+                  onPatchPair={patchPair}
+                  onAddPair={addPair}
+                  onDuplicate={duplicatePair}
+                  onDelete={deletePair}
+                  onToast={setToast}
+                />
+              }
+            />
+            <Route
+              path="/features"
+              element={
+                <FeatureMatrix
+                  customFonts={customFonts}
+                  fontTick={fontTick}
+                  loadGoogle={loadGoogleForMatrix}
+                  onUseFont={useFontInCompare}
+                  onToast={setToast}
+                />
+              }
+            />
+          </Routes>
+        </div>
 
-        {settings.sample === 'custom' && (
-          <section className="mb-4 flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3 sm:flex-row dark:border-zinc-800 dark:bg-zinc-900">
-            <label className="flex flex-1 items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              标题
-              <input
-                className="h-8 flex-1 rounded-md border border-zinc-300 bg-white px-2 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-                value={settings.customTitle}
-                onChange={(e) => patchSettings({ customTitle: e.target.value })}
-              />
-            </label>
-            <label className="flex flex-[2] flex-col gap-1 text-xs text-zinc-500 sm:flex-row sm:items-center sm:gap-2 dark:text-zinc-400">
-              正文
-              <textarea
-                className="min-h-8 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-                rows={2}
-                value={settings.customBody}
-                placeholder="用空行分段"
-                onChange={(e) => patchSettings({ customBody: e.target.value })}
-              />
-            </label>
-          </section>
+        {modalOpen && (
+          <FontModal
+            customFonts={customFonts}
+            onClose={() => setModalOpen(false)}
+            onAdd={addFont}
+            onRemove={removeFont}
+          />
         )}
 
-        <main className={gridCls}>
-          {pairs.map((pair) => (
-            <PairCard
-              key={pair.id}
-              pair={pair}
-              settings={settings}
-              sample={sample}
-              customFonts={customFonts.map((f) => f.name)}
-              fontTick={fontTick}
-              onChange={(patch) => patchPair(pair.id, patch)}
-              onDelete={() => deletePair(pair.id)}
-              onDuplicate={() => duplicatePair(pair.id)}
-              onToast={setToast}
-            />
-          ))}
-          {pairs.length === 0 && (
-            <div className="col-span-full rounded-xl border border-dashed border-zinc-300 p-10 text-center text-sm text-zinc-400 dark:border-zinc-700">
-              暂无组合，点击右上角「添加组合」开始对比
-            </div>
-          )}
-        </main>
+        {toast && (
+          <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
+            {toast}
+          </div>
+        )}
       </div>
-
-      {modalOpen && (
-        <FontModal
-          customFonts={customFonts}
-          onClose={() => setModalOpen(false)}
-          onAdd={addFont}
-          onRemove={removeFont}
-        />
-      )}
-
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
-          {toast}
-        </div>
-      )}
-    </div>
+    </HashRouter>
   )
 }

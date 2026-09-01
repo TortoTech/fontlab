@@ -39,3 +39,6 @@ export interface Sample {
   code?: string
   caption?: string
 }
+
+export type FontSource = 'local' | 'google' | 'custom'
+
