@@ -15,6 +15,12 @@ export interface FontFeatureResult {
   italic: TriState
   weights: number[]
   isVariable: boolean
+  figures?: FiguresInfo
+}
+
+export interface FiguresInfo {
+  def: 'lining' | 'oldstyle' | 'unknown'
+  onum: TriState
 }
 
 let ctx: CanvasRenderingContext2D | null = null
@@ -88,6 +94,32 @@ function styleHeuristic(family: string, kind: 'bold' | 'italic'): TriState {
   return samePixels(base, test) ? 'no' : 'maybe'
 }
 
+let figSpan: HTMLSpanElement | null = null
+
+function figuresWidth(family: string, variant: 'normal' | 'lining' | 'oldstyle'): number {
+  if (!figSpan) {
+    figSpan = document.createElement('span')
+    figSpan.style.cssText =
+      'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;font-size:48px;'
+    figSpan.textContent = '0123456789'
+    document.body.appendChild(figSpan)
+  }
+  figSpan.style.fontFamily = `"${family}"`
+  figSpan.style.fontVariantNumeric =
+    variant === 'normal' ? 'normal' : variant === 'lining' ? 'lining-nums' : 'oldstyle-nums'
+  return figSpan.getBoundingClientRect().width
+}
+
+export function detectFigures(family: string): FiguresInfo {
+  const wN = figuresWidth(family, 'normal')
+  const wL = figuresWidth(family, 'lining')
+  const wO = figuresWidth(family, 'oldstyle')
+  const eps = 0.01
+  const hasOnum = Math.abs(wL - wO) > eps
+  const defOld = Math.abs(wN - wL) > eps
+  return { def: defOld ? 'oldstyle' : 'lining', onum: hasOnum ? 'yes' : 'no' }
+}
+
 export function detectFont(family: string, source: FontSource): FontFeatureResult {
   const available = fontExists(family)
   const faces = available ? enumerateFaces(family) : null
@@ -114,5 +146,6 @@ export function detectFont(family: string, source: FontSource): FontFeatureResul
     italic,
     weights: faces?.weights ?? [],
     isVariable: faces?.isVariable ?? false,
+    figures: available ? detectFigures(family) : undefined,
   }
 }

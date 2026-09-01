@@ -5,8 +5,8 @@ import type { CatalogFont } from '../catalog'
 import { allFontEntries } from '../data'
 import { detectFont } from '../detect'
 import type { FontFeatureResult, TriState } from '../detect'
-import { cjkViaCmap, LOCAL_ZH_FAMILIES, queryLocalFonts } from '../localFonts'
-import type { LocalFontInfo } from '../localFonts'
+import { analyzeLocalFont, LOCAL_CURATED_FAMILIES, queryLocalFonts } from '../localFonts'
+import type { LocalFontAnalysis, LocalFontInfo } from '../localFonts'
 import type { CustomFont, FontSource } from '../types'
 
 interface Props {
@@ -52,6 +52,35 @@ function Tri({ v }: { v: TriState }) {
   )
 }
 
+const SCRIPT_LABEL: [string, string][] = [
+  ['chinese-simplified', '简中'],
+  ['chinese-traditional', '繁中'],
+  ['japanese', '日文'],
+  ['korean', '韩文'],
+  ['arabic', '阿拉伯'],
+  ['hebrew', '希伯来'],
+  ['greek', '希腊'],
+  ['cyrillic', '西里尔'],
+  ['thai', '泰文'],
+  ['devanagari', '天城文'],
+  ['latin', '拉丁'],
+]
+
+function langLabel(subsets: string[] | undefined, pl?: string): string {
+  if (pl) return pl
+  if (!subsets?.length) return '—'
+  const labels = SCRIPT_LABEL.filter(([k]) => subsets.includes(k)).map(([, v]) => v)
+  if (labels.length === 0) return subsets[0]
+  return labels.length > 2 ? `${labels.slice(0, 2).join('/')} +${labels.length - 2}` : labels.join('/')
+}
+
+function figuresLabel(r: FontFeatureResult): string {
+  if (!r.available || !r.figures) return '—'
+  const f = r.figures
+  if (f.def === 'oldstyle') return f.onum === 'yes' ? '旧式·可齐线' : '旧式'
+  return f.onum === 'yes' ? '齐线·可旧式' : '齐线'
+}
+
 function weightsLabel(r: FontFeatureResult): string {
   if (!r.available && r.weights.length > 0) return r.weights.length > 5 ? `${r.weights.length} 档` : r.weights.join(' ')
   if (!r.available || r.weights.length === 0) return '—'
@@ -69,7 +98,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   const [loading, setLoading] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<string | null>(null)
   const [localInfo, setLocalInfo] = useState<Map<string, LocalFontInfo> | null>(null)
-  const [cjkPrecise, setCjkPrecise] = useState<Map<string, boolean>>(() => new Map())
+  const [localAnalysis, setLocalAnalysis] = useState<Map<string, LocalFontAnalysis>>(() => new Map())
   const [localStatus, setLocalStatus] = useState<'pending' | 'on' | 'off'>('pending')
   const booting = useRef(false)
   const navigate = useNavigate()
@@ -92,15 +121,15 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
     setLocalStatus('on')
     setLocalInfo(res.result.info)
     const { blobs } = res.result
-    const queue = LOCAL_ZH_FAMILIES.filter((k) => blobs.has(k))
+    const queue = LOCAL_CURATED_FAMILIES.filter((k) => blobs.has(k))
     const worker = async () => {
       for (;;) {
         const key = queue.shift()
         if (!key) return
         const getBlob = blobs.get(key)
         if (!getBlob) continue
-        const has = await cjkViaCmap(getBlob)
-        if (has !== null) setCjkPrecise((m) => new Map(m).set(key, has))
+        const a = await analyzeLocalFont(getBlob)
+        if (a.cjk !== null || a.onum !== null) setLocalAnalysis((m) => new Map(m).set(key, a))
       }
     }
     void worker()
@@ -139,14 +168,19 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
           }
         }
         if (r.available) {
-          const cjk = cjkPrecise.get(key)
-          if (cjk !== undefined) r = { ...r, cjk: cjk ? 'yes' : 'no' }
+          const an = localAnalysis.get(key)
+          if (an) {
+            if (an.cjk !== null) r = { ...r, cjk: an.cjk ? 'yes' : 'no' }
+            if (an.onum !== null && r.figures) {
+              r = { ...r, figures: { ...r.figures, onum: an.onum ? 'yes' : 'no' } }
+            }
+          }
         }
         return r
       }),
     // fontTick 变化代表字体加载状态更新，需要重新检测
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [customFonts, fontTick, localInfo, cjkPrecise],
+    [customFonts, fontTick, localInfo, localAnalysis],
   )
 
   const catalogMap = useMemo(() => new Map(catalog.map((f) => [f.f.toLowerCase(), f])), [catalog])
@@ -273,15 +307,18 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
       </div>
 
       <div className="max-h-[75vh] overflow-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full min-w-[960px] border-collapse text-sm">
+        <table className="w-full min-w-[1200px] border-collapse text-sm">
           <thead>
             <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
               <th className={`${TH_STICKY} left-0 z-20 px-3 font-medium`}>字体</th>
               <th className={`${TH_STICKY} px-2 font-medium`}>热度</th>
+              <th className={`${TH_STICKY} px-2 font-medium`}>风格</th>
+              <th className={`${TH_STICKY} px-2 font-medium`}>语言</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>等宽</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>中文</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>拉丁</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>数字</th>
+              <th className={`${TH_STICKY} px-2 font-medium`}>数字风格</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>粗体</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>斜体</th>
               <th className={`${TH_STICKY} px-3 font-medium`}>可用字重</th>
@@ -328,6 +365,12 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                     <td className="px-2 text-xs text-zinc-400 tabular-nums dark:text-zinc-500">
                       {rank ? `#${rank}` : '—'}
                     </td>
+                    <td className="max-w-28 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400" title={cat?.cl?.join(' / ')}>
+                      {cat?.cl?.length ? cat.cl.join('/') : '—'}
+                    </td>
+                    <td className="max-w-28 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400" title={cat?.s?.join(' ')}>
+                      {langLabel(cat?.s, cat?.pl)}
+                    </td>
                     <td className="px-2 text-center">
                       <Tri v={r.monospace} />
                     </td>
@@ -339,6 +382,12 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                     </td>
                     <td className="px-2 text-center">
                       <Tri v={r.digits} />
+                    </td>
+                    <td
+                      className="max-w-32 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400"
+                      title="默认数字风格 / 是否支持旧式数字（onum 特性）"
+                    >
+                      {figuresLabel(r)}
                     </td>
                     <td className="px-2 text-center">
                       <Tri v={r.bold} />
@@ -373,7 +422,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                   </tr>
                   {isOpen && cat && (
                     <tr className="border-b border-zinc-100 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-800/30">
-                      <td colSpan={10} className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
+                      <td colSpan={13} className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
                         {cat.desc && <p className="mb-1.5 max-w-3xl leading-5">{cat.desc}</p>}
                         <p className="flex flex-wrap gap-x-4 gap-y-1">
                           {cat.d && cat.d.length > 0 && <span>设计师：{cat.d.join('、')}</span>}
@@ -391,7 +440,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
             })}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-10 text-center text-sm text-zinc-400">
+                <td colSpan={13} className="px-3 py-10 text-center text-sm text-zinc-400">
                   没有匹配的字体
                 </td>
               </tr>

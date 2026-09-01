@@ -67,18 +67,33 @@ export async function queryLocalFonts(): Promise<{ status: LocalFontsStatus; res
 
 interface ParsedFontLike {
   hasGlyphForCodePoint: (cp: number) => boolean
+  availableFeatures: string[]
 }
 
-export async function cjkViaCmap(getBlob: () => Promise<Blob>): Promise<boolean | null> {
+export interface LocalFontAnalysis {
+  cjk: boolean | null
+  onum: boolean | null
+}
+
+export async function analyzeLocalFont(getBlob: () => Promise<Blob>): Promise<LocalFontAnalysis> {
   try {
     const buf = new Uint8Array(await (await getBlob()).arrayBuffer())
     const { create } = await import('fontkit')
     const created = create(buf) as ParsedFontLike | { fonts: ParsedFontLike[] }
     const fonts = 'fonts' in created ? created.fonts : [created]
-    return fonts.some((f) => f.hasGlyphForCodePoint(0x4e2d))
+    const feats = new Set<string>()
+    fonts.forEach((f) => f.availableFeatures.forEach((x) => feats.add(x)))
+    return {
+      cjk: fonts.some((f) => f.hasGlyphForCodePoint(0x4e2d)),
+      onum: feats.has('onum') ? true : feats.has('lnum') ? false : null,
+    }
   } catch {
-    return null
+    return { cjk: null, onum: null }
   }
 }
 
 export const LOCAL_ZH_FAMILIES: string[] = FONT_GROUPS[0].fonts.map((f) => f.toLowerCase())
+
+export const LOCAL_CURATED_FAMILIES: string[] = FONT_GROUPS.flatMap((g) =>
+  g.fonts.map((f) => f.toLowerCase()),
+)
