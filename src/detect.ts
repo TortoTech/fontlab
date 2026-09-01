@@ -1,4 +1,4 @@
-import { fontAvailable } from './fontUtils'
+import { fontExists, fontHasCjk } from './fontUtils'
 import type { FontSource } from './types'
 
 export type TriState = 'yes' | 'maybe' | 'no' | 'unknown'
@@ -22,14 +22,6 @@ let ctx: CanvasRenderingContext2D | null = null
 function getCtx(): CanvasRenderingContext2D | null {
   if (!ctx) ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
   return ctx
-}
-
-export function hasGlyph(family: string, text: string): TriState {
-  try {
-    return document.fonts.check(`16px "${family}"`, text) ? 'yes' : 'no'
-  } catch {
-    return 'unknown'
-  }
 }
 
 function isMonospace(family: string): TriState {
@@ -97,7 +89,7 @@ function styleHeuristic(family: string, kind: 'bold' | 'italic'): TriState {
 }
 
 export function detectFont(family: string, source: FontSource): FontFeatureResult {
-  const available = fontAvailable(family)
+  const available = fontExists(family)
   const faces = available ? enumerateFaces(family) : null
 
   let bold: TriState = 'unknown'
@@ -110,16 +102,14 @@ export function detectFont(family: string, source: FontSource): FontFeatureResul
     italic = styleHeuristic(family, 'italic')
   }
 
-  const latin = available ? hasGlyph(family, 'A') : 'unknown'
-
   return {
     family,
     source,
     available,
-    monospace: available && latin === 'yes' ? isMonospace(family) : 'unknown',
-    cjk: available ? hasGlyph(family, '中') : 'unknown',
-    latin,
-    digits: available ? hasGlyph(family, '0') : 'unknown',
+    monospace: available ? isMonospace(family) : 'unknown',
+    cjk: available ? (fontHasCjk(family) ? 'yes' : 'no') : 'unknown',
+    latin: available ? 'yes' : 'unknown',
+    digits: available ? 'yes' : 'unknown',
     bold,
     italic,
     weights: faces?.weights ?? [],

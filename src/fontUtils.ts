@@ -3,11 +3,37 @@ import type { CustomFont, FontPair, Settings } from './types'
 const injected = new Map<string, HTMLElement>()
 
 export function fontAvailable(name: string): boolean {
-  try {
-    return document.fonts.check(`16px "${name}"`)
-  } catch {
-    return false
-  }
+  return fontExists(name)
+}
+
+let measureCanvas: CanvasRenderingContext2D | null = null
+
+function measureCtx(): CanvasRenderingContext2D | null {
+  if (!measureCanvas) measureCanvas = document.createElement('canvas').getContext('2d')
+  return measureCanvas
+}
+
+function textWidth(font: string, text: string): number {
+  const c = measureCtx()
+  if (!c) return -1
+  c.font = font
+  return c.measureText(text).width
+}
+
+const near = (a: number, b: number) => Math.abs(a - b) < 0.01
+
+export function fontExists(family: string): boolean {
+  const probe = 'Hamburgefonstiv 0123456789'
+  const q = `"${family}"`
+  return (
+    !near(textWidth(`16px ${q}, serif`, probe), textWidth('16px serif', probe)) ||
+    !near(textWidth(`16px ${q}, monospace`, probe), textWidth('16px monospace', probe))
+  )
+}
+
+export function fontHasCjk(family: string): boolean {
+  const probe = '中文测试永'
+  return !near(textWidth(`16px "${family}", Arial`, probe), textWidth('16px Arial', probe))
 }
 
 const quote = (name: string) => `"${name}"`

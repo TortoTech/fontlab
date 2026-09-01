@@ -5,7 +5,6 @@ import type { CatalogFont } from '../catalog'
 import { allFontEntries } from '../data'
 import { detectFont } from '../detect'
 import type { FontFeatureResult, TriState } from '../detect'
-import { fontAvailable } from '../fontUtils'
 import type { CustomFont, FontSource } from '../types'
 
 interface Props {
@@ -84,17 +83,20 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
 
   const rows = useMemo(() => {
     const seen = new Set<string>()
-    const enriched = live.map((r) => {
-      seen.add(r.family.toLowerCase())
+    const withMeta = (r: FontFeatureResult): FontFeatureResult => {
       if (!r.available && r.source === 'google') {
         const entry = catalogMap.get(r.family.toLowerCase())
         if (entry) return catalogFeatures(entry)
       }
       return r
+    }
+    const enriched = live.map((r) => {
+      seen.add(r.family.toLowerCase())
+      return withMeta(r)
     })
     const extra = catalog
       .filter((f) => !seen.has(f.f.toLowerCase()))
-      .map((f) => (fontAvailable(f.f) ? detectFont(f.f, 'google') : catalogFeatures(f)))
+      .map((f) => withMeta(detectFont(f.f, 'google')))
     return [...enriched, ...extra]
   }, [live, catalog, catalogMap])
 
