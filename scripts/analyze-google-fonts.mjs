@@ -63,7 +63,8 @@ async function processOne({ family, url }) {
       const xH = g(120).maxY
       if (capH > 0 && xH > 0) {
         const zero = g(48)
-        const hasDesc = [51, 52, 53, 55, 57].some((cp) => g(cp).minY < -5)
+        const deep = -0.08 * (font.unitsPerEm || 1000)
+        const hasDesc = [51, 52, 53, 55, 57].some((cp) => g(cp).minY < deep)
         entry.fd = zero.maxY < (xH + capH) / 2 || hasDesc ? 'oldstyle' : 'lining'
       }
     } catch {

@@ -145,7 +145,9 @@ export async function featuresFromBuffer(buf: ArrayBuffer): Promise<FontFeatures
       const xH = font.glyphForCodePoint(120).bbox.maxY
       if (capH > 0 && xH > 0) {
         const zero = font.glyphForCodePoint(48).bbox
-        const hasDesc = [51, 52, 53, 55, 57].some((cp) => font.glyphForCodePoint(cp).bbox.minY < -5)
+        const upm = (fonts[0] as unknown as { unitsPerEm?: number }).unitsPerEm || 1000
+        const deep = -0.08 * upm
+        const hasDesc = [51, 52, 53, 55, 57].some((cp) => font.glyphForCodePoint(cp).bbox.minY < deep)
         result.fd = zero.maxY < (xH + capH) / 2 || hasDesc ? 'oldstyle' : 'lining'
       }
     } catch {
