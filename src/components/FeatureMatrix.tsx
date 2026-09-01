@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { catalogFeatures, css2Query, loadCatalog } from '../catalog'
 import type { CatalogFont } from '../catalog'
 import { allFontEntries } from '../data'
 import { detectFont } from '../detect'
 import type { FontFeatureResult, TriState } from '../detect'
+import { cjkViaCmap, LOCAL_ZH_FAMILIES, queryLocalFonts } from '../localFonts'
+import type { LocalFontInfo } from '../localFonts'
 import type { CustomFont, FontSource } from '../types'
 
 interface Props {
@@ -60,7 +62,48 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   const [sortBy, setSortBy] = useState<'default' | 'popularity'>('default')
   const [limit, setLimit] = useState(PAGE_SIZE)
   const [loading, setLoading] = useState<Set<string>>(new Set())
+  const [localInfo, setLocalInfo] = useState<Map<string, LocalFontInfo> | null>(null)
+  const [cjkPrecise, setCjkPrecise] = useState<Map<string, boolean>>(() => new Map())
+  const [localStatus, setLocalStatus] = useState<'pending' | 'on' | 'off'>('pending')
+  const booting = useRef(false)
   const navigate = useNavigate()
+
+  const bootLocal = useCallback(async () => {
+    if (booting.current) return
+    booting.current = true
+    const res = await queryLocalFonts()
+    if (res.status === 'needs-activation') {
+      booting.current = false
+      const retry = () => void bootLocal()
+      window.addEventListener('pointerdown', retry, { once: true })
+      window.addEventListener('keydown', retry, { once: true })
+      return
+    }
+    if (res.status !== 'ok' || !res.result) {
+      setLocalStatus('off')
+      return
+    }
+    setLocalStatus('on')
+    setLocalInfo(res.result.info)
+    const { blobs } = res.result
+    const queue = LOCAL_ZH_FAMILIES.filter((k) => blobs.has(k))
+    const worker = async () => {
+      for (;;) {
+        const key = queue.shift()
+        if (!key) return
+        const getBlob = blobs.get(key)
+        if (!getBlob) continue
+        const has = await cjkViaCmap(getBlob)
+        if (has !== null) setCjkPrecise((m) => new Map(m).set(key, has))
+      }
+    }
+    void worker()
+    void worker()
+  }, [])
+
+  useEffect(() => {
+    void bootLocal()
+  }, [bootLocal])
 
   useEffect(() => {
     let alive = true
@@ -73,10 +116,31 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   }, [])
 
   const live = useMemo(
-    () => allFontEntries(customFonts).map((e) => detectFont(e.family, e.source)),
+    () =>
+      allFontEntries(customFonts).map((e) => {
+        let r = detectFont(e.family, e.source)
+        const key = e.family.toLowerCase()
+        if (r.available && r.source === 'local' && localInfo) {
+          const info = localInfo.get(key)
+          if (info) {
+            r = {
+              ...r,
+              bold: info.weights.some((w) => w >= 600) ? 'yes' : 'no',
+              italic: info.italic ? 'yes' : 'no',
+              weights: info.weights,
+              isVariable: false,
+            }
+          }
+        }
+        if (r.available) {
+          const cjk = cjkPrecise.get(key)
+          if (cjk !== undefined) r = { ...r, cjk: cjk ? 'yes' : 'no' }
+        }
+        return r
+      }),
     // fontTick 变化代表字体加载状态更新，需要重新检测
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [customFonts, fontTick],
+    [customFonts, fontTick, localInfo, cjkPrecise],
   )
 
   const catalogMap = useMemo(() => new Map(catalog.map((f) => [f.f.toLowerCase(), f])), [catalog])
@@ -192,6 +256,13 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
         </span>
         <span>
           <b className="text-zinc-300 dark:text-zinc-600">?</b> 未知
+        </span>
+        <span className="ml-auto text-zinc-400 dark:text-zinc-500">
+          {localStatus === 'on'
+            ? '本地字体精确检测：已启用'
+            : localStatus === 'pending'
+              ? '本地字体精确检测：等待授权…'
+              : '本地字体精确检测：不可用，使用启发式'}
         </span>
       </div>
 
@@ -309,7 +380,9 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
 
       <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
         检测说明：已加载字体按实际字形检测；未加载的 Google Fonts
-        字体按官方目录元数据推断（粗体/斜体看变体，中文看子集覆盖，等宽看分类），「热度」为 Google Fonts 全球使用热度排名。
+        字体按官方目录元数据推断（粗体/斜体看变体，中文看子集覆盖，等宽看分类）；「热度」为 Google Fonts
+        全球使用热度排名。本地字体在支持的浏览器（Chrome/Edge）授权后经 Local Font Access
+        API 精确检测（真实字重/斜体 + 解析字形表判断中文覆盖），不支持或未授权时自动回退到渲染启发式。
       </p>
     </div>
   )

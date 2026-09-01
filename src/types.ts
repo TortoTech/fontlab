@@ -42,3 +42,5 @@ export interface Sample {
 
 export type FontSource = 'local' | 'google' | 'custom'
 
+export type TriState = 'yes' | 'maybe' | 'no' | 'unknown'
+

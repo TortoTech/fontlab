@@ -1,7 +1,7 @@
 import { fontExists, fontHasCjk } from './fontUtils'
-import type { FontSource } from './types'
+import type { FontSource, TriState } from './types'
 
-export type TriState = 'yes' | 'maybe' | 'no' | 'unknown'
+export type { TriState }
 
 export interface FontFeatureResult {
   family: string
@@ -107,7 +107,7 @@ export function detectFont(family: string, source: FontSource): FontFeatureResul
     source,
     available,
     monospace: available ? isMonospace(family) : 'unknown',
-    cjk: available ? (fontHasCjk(family) ? 'yes' : 'no') : 'unknown',
+    cjk: available ? fontHasCjk(family) : 'unknown',
     latin: available ? 'yes' : 'unknown',
     digits: available ? 'yes' : 'unknown',
     bold,

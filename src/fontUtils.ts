@@ -1,4 +1,4 @@
-import type { CustomFont, FontPair, Settings } from './types'
+import type { CustomFont, FontPair, Settings, TriState } from './types'
 
 const injected = new Map<string, HTMLElement>()
 
@@ -27,14 +27,36 @@ export function fontExists(family: string): boolean {
   const q = `"${family}"`
   return (
     !near(textWidth(`16px ${q}, serif`, probe), textWidth('16px serif', probe)) ||
+    !near(textWidth(`16px ${q}, sans-serif`, probe), textWidth('16px sans-serif', probe)) ||
     !near(textWidth(`16px ${q}, monospace`, probe), textWidth('16px monospace', probe))
   )
 }
 
-export function fontHasCjk(family: string): boolean {
+export function fontHasCjk(family: string): TriState {
   const probe = '中文测试永'
-  return !near(textWidth(`16px "${family}", Arial`, probe), textWidth('16px Arial', probe))
+  const wF = textWidth(`16px "${family}", Arial`, probe)
+  const wA = textWidth('16px Arial', probe)
+  if (!near(wF, wA)) return 'yes'
+  for (const witness of CJK_WITNESSES) {
+    if (witness.toLowerCase() === family.toLowerCase()) continue
+    if (!fontExists(witness)) continue
+    const wFG = textWidth(`16px "${family}", "${witness}"`, probe)
+    const wG = textWidth(`16px "${witness}"`, probe)
+    return near(wFG, wG) ? 'no' : 'yes'
+  }
+  return 'unknown'
 }
+
+const CJK_WITNESSES = [
+  'Microsoft YaHei',
+  'KaiTi',
+  'SimSun',
+  'PingFang SC',
+  'Hiragino Sans GB',
+  'Songti SC',
+  'STKaiti',
+  'Noto Sans CJK SC',
+]
 
 const quote = (name: string) => `"${name}"`
 
