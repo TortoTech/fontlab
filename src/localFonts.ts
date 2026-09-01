@@ -75,6 +75,11 @@ export interface LocalFontAnalysis {
   onum: boolean | null
   tnum: boolean | null
   smcp: boolean | null
+  liga: boolean | null
+  frac: boolean | null
+  sups: boolean | null
+  subs: boolean | null
+  ordn: boolean | null
 }
 
 export async function analyzeLocalFont(getBlob: () => Promise<Blob>): Promise<LocalFontAnalysis> {
@@ -90,9 +95,24 @@ export async function analyzeLocalFont(getBlob: () => Promise<Blob>): Promise<Lo
       onum: feats.has('onum') ? true : feats.has('lnum') ? false : null,
       tnum: feats.has('tnum') ? true : feats.has('pnum') ? false : null,
       smcp: feats.has('smcp') ? true : false,
+      liga: feats.has('liga') ? true : false,
+      frac: feats.has('frac') ? true : false,
+      sups: feats.has('sups') ? true : false,
+      subs: feats.has('subs') ? true : false,
+      ordn: feats.has('ordn') ? true : false,
     }
   } catch {
-    return { cjk: null, onum: null, tnum: null, smcp: null }
+    return {
+      cjk: null,
+      onum: null,
+      tnum: null,
+      smcp: null,
+      liga: null,
+      frac: null,
+      sups: null,
+      subs: null,
+      ordn: null,
+    }
   }
 }
 

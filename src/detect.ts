@@ -15,6 +15,11 @@ export interface FontFeatureResult {
   italic: TriState
   tnum: TriState
   smcp: TriState
+  liga: TriState
+  frac: TriState
+  sups: TriState
+  subs: TriState
+  ordn: TriState
   weights: number[]
   isVariable: boolean
   figures?: FiguresInfo
@@ -153,6 +158,12 @@ export function detectSmcp(family: string): TriState {
   return Math.abs(wS - wN) > 0.01 ? 'yes' : 'no'
 }
 
+export function detectFeature(family: string, feature: string, text: string): TriState {
+  const wOn = featWidth(family, `"${feature}" 1`, text)
+  const wOff = featWidth(family, `"${feature}" 0`, text)
+  return Math.abs(wOn - wOff) > 0.01 ? 'yes' : 'no'
+}
+
 export function detectFont(family: string, source: FontSource): FontFeatureResult {
   const available = fontExists(family)
   const faces = available ? enumerateFaces(family) : null
@@ -182,5 +193,10 @@ export function detectFont(family: string, source: FontSource): FontFeatureResul
     figures: available ? detectFigures(family) : undefined,
     tnum: available ? detectTnum(family) : 'unknown',
     smcp: available ? detectSmcp(family) : 'unknown',
+    liga: available ? detectFeature(family, 'liga', 'fi fl ff ffi') : 'unknown',
+    frac: available ? detectFeature(family, 'frac', '1/2 2/3 3/4') : 'unknown',
+    sups: available ? detectFeature(family, 'sups', 'ABC123') : 'unknown',
+    subs: available ? detectFeature(family, 'subs', 'ABC123') : 'unknown',
+    ordn: available ? detectFeature(family, 'ordn', '1o 2a 3o 4a') : 'unknown',
   }
 }

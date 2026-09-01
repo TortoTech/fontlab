@@ -59,6 +59,11 @@ export function catalogFeatures(font: CatalogFont): FontFeatureResult {
     italic: hasItalic ? 'yes' : 'no',
     tnum: 'unknown',
     smcp: 'unknown',
+    liga: 'unknown',
+    frac: 'unknown',
+    sups: 'unknown',
+    subs: 'unknown',
+    ordn: 'unknown',
     weights,
     isVariable: false,
   }

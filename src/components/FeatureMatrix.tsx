@@ -88,6 +88,171 @@ function weightsLabel(r: FontFeatureResult): string {
   return r.weights.length <= 5 ? r.weights.join(' ') : `${r.weights.length} 档`
 }
 
+type ColKey =
+  | 'style'
+  | 'lang'
+  | 'cjk'
+  | 'latin'
+  | 'digits'
+  | 'figures'
+  | 'tnum'
+  | 'liga'
+  | 'frac'
+  | 'supsub'
+  | 'ordn'
+  | 'mono'
+  | 'bold'
+  | 'italic'
+  | 'smcp'
+  | 'weights'
+  | 'axes'
+
+interface ColDef {
+  key: ColKey
+  label: string
+  center?: boolean
+  defaultOn: boolean
+}
+
+const COLUMNS: ColDef[] = [
+  { key: 'style', label: '风格', defaultOn: true },
+  { key: 'lang', label: '语言', defaultOn: true },
+  { key: 'cjk', label: '中文', center: true, defaultOn: true },
+  { key: 'latin', label: '拉丁', center: true, defaultOn: true },
+  { key: 'digits', label: '数字', center: true, defaultOn: true },
+  { key: 'figures', label: '数字风格', defaultOn: true },
+  { key: 'tnum', label: '表格数字', center: true, defaultOn: true },
+  { key: 'liga', label: '连字', center: true, defaultOn: false },
+  { key: 'frac', label: '分数', center: true, defaultOn: false },
+  { key: 'supsub', label: '上/下标', center: true, defaultOn: false },
+  { key: 'ordn', label: '序数', center: true, defaultOn: false },
+  { key: 'mono', label: '等宽', center: true, defaultOn: true },
+  { key: 'bold', label: '粗体', center: true, defaultOn: true },
+  { key: 'italic', label: '斜体', center: true, defaultOn: true },
+  { key: 'smcp', label: '小型大写', center: true, defaultOn: true },
+  { key: 'weights', label: '可用字重', defaultOn: true },
+  { key: 'axes', label: '可变轴', defaultOn: true },
+]
+
+const COLS_KEY = 'fontlab-matrix-cols-v1'
+
+function Cell({ col, r, cat }: { col: ColDef; r: FontFeatureResult; cat?: CatalogFont }) {
+  const tc = 'px-2 text-center'
+  const tx = 'max-w-28 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400'
+  switch (col.key) {
+    case 'style':
+      return (
+        <td className={tx} title={cat?.cl?.join(' / ')}>
+          {cat?.cl?.length ? cat.cl.join('/') : '—'}
+        </td>
+      )
+    case 'lang':
+      return (
+        <td className={tx} title={cat?.s?.join(' ')}>
+          {langLabel(cat?.s, cat?.pl)}
+        </td>
+      )
+    case 'cjk':
+      return (
+        <td className={tc}>
+          <Tri v={r.cjk} />
+        </td>
+      )
+    case 'latin':
+      return (
+        <td className={tc}>
+          <Tri v={r.latin} />
+        </td>
+      )
+    case 'digits':
+      return (
+        <td className={tc}>
+          <Tri v={r.digits} />
+        </td>
+      )
+    case 'figures':
+      return (
+        <td
+          className="max-w-32 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400"
+          title="默认数字风格 / 是否支持旧式数字（onum 特性）"
+        >
+          {figuresLabel(r)}
+        </td>
+      )
+    case 'tnum':
+      return (
+        <td className={tc} title="是否支持表格数字（tnum，数字等宽对齐）">
+          <Tri v={r.tnum} />
+        </td>
+      )
+    case 'liga':
+      return (
+        <td className={tc} title="是否支持连字（liga）">
+          <Tri v={r.liga} />
+        </td>
+      )
+    case 'frac':
+      return (
+        <td className={tc} title="是否支持分数（frac）">
+          <Tri v={r.frac} />
+        </td>
+      )
+    case 'supsub': {
+      const v: TriState =
+        r.sups === 'yes' && r.subs === 'yes'
+          ? 'yes'
+          : r.sups === 'yes' || r.subs === 'yes'
+            ? 'maybe'
+            : r.sups === 'unknown' || r.subs === 'unknown'
+              ? 'unknown'
+              : 'no'
+      return (
+        <td className={tc} title="上标/下标（sups / subs），~ 表示仅支持其一">
+          <Tri v={v} />
+        </td>
+      )
+    }
+    case 'ordn':
+      return (
+        <td className={tc} title="是否支持序数（ordn）">
+          <Tri v={r.ordn} />
+        </td>
+      )
+    case 'mono':
+      return (
+        <td className={tc}>
+          <Tri v={r.monospace} />
+        </td>
+      )
+    case 'bold':
+      return (
+        <td className={tc}>
+          <Tri v={r.bold} />
+        </td>
+      )
+    case 'italic':
+      return (
+        <td className={tc}>
+          <Tri v={r.italic} />
+        </td>
+      )
+    case 'smcp':
+      return (
+        <td className={tc} title="是否支持真实小型大写字母（smcp）">
+          <Tri v={r.smcp} />
+        </td>
+      )
+    case 'weights':
+      return <td className="px-3 text-xs text-zinc-500 tabular-nums dark:text-zinc-400">{weightsLabel(r)}</td>
+    case 'axes':
+      return (
+        <td className={tx} title={cat?.ax?.join(' / ')}>
+          {cat?.ax?.length ? cat.ax.map((a) => a.split(' ')[0]).join('/') : '—'}
+        </td>
+      )
+  }
+}
+
 export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUseFont, onToast }: Props) {
   const [catalog, setCatalog] = useState<CatalogFont[]>([])
   const [query, setQuery] = useState('')
@@ -100,8 +265,25 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   const [localInfo, setLocalInfo] = useState<Map<string, LocalFontInfo> | null>(null)
   const [localAnalysis, setLocalAnalysis] = useState<Map<string, LocalFontAnalysis>>(() => new Map())
   const [localStatus, setLocalStatus] = useState<'pending' | 'on' | 'off'>('pending')
+  const [colsOpen, setColsOpen] = useState(false)
+  const [cols, setCols] = useState<Record<string, boolean>>(() => {
+    const base: Record<string, boolean> = {}
+    COLUMNS.forEach((c) => (base[c.key] = c.defaultOn))
+    try {
+      return { ...base, ...(JSON.parse(localStorage.getItem(COLS_KEY) ?? '{}') as Record<string, boolean>) }
+    } catch {
+      return base
+    }
+  })
   const booting = useRef(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    localStorage.setItem(COLS_KEY, JSON.stringify(cols))
+  }, [cols])
+
+  const activeCols = COLUMNS.filter((c) => cols[c.key])
+  const colCount = activeCols.length + 2
 
   const bootLocal = useCallback(async () => {
     if (booting.current) return
@@ -176,6 +358,11 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
             }
             if (an.tnum !== null) r = { ...r, tnum: an.tnum ? 'yes' : 'no' }
             if (an.smcp !== null) r = { ...r, smcp: an.smcp ? 'yes' : 'no' }
+            if (an.liga !== null) r = { ...r, liga: an.liga ? 'yes' : 'no' }
+            if (an.frac !== null) r = { ...r, frac: an.frac ? 'yes' : 'no' }
+            if (an.sups !== null) r = { ...r, sups: an.sups ? 'yes' : 'no' }
+            if (an.subs !== null) r = { ...r, subs: an.subs ? 'yes' : 'no' }
+            if (an.ordn !== null) r = { ...r, ordn: an.ordn ? 'yes' : 'no' }
           }
         }
         return r
@@ -272,6 +459,34 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
           <option value="default">默认排序</option>
           <option value="popularity">按热度排序</option>
         </select>
+        <div className="relative">
+          <button className={inputCls} onClick={() => setColsOpen((o) => !o)}>
+            列 ▾
+          </button>
+          {colsOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setColsOpen(false)} />
+              <div className="absolute left-0 top-9 z-30 w-72 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
+                  {COLUMNS.map((c) => (
+                    <label
+                      key={c.key}
+                      className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300"
+                    >
+                      <input
+                        type="checkbox"
+                        className="accent-indigo-600"
+                        checked={cols[c.key]}
+                        onChange={(e) => setCols((m) => ({ ...m, [c.key]: e.target.checked }))}
+                      />
+                      {c.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
         <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
           <input
             type="checkbox"
@@ -309,23 +524,15 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
       </div>
 
       <div className="max-h-[75vh] overflow-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full min-w-[1330px] border-collapse text-sm">
+        <table className="w-full border-collapse text-sm" style={{ minWidth: 320 + activeCols.length * 76 }}>
           <thead>
             <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
               <th className={`${TH_STICKY} left-0 z-20 px-3 font-medium`}>字体</th>
-              <th className={`${TH_STICKY} px-2 font-medium`}>风格</th>
-              <th className={`${TH_STICKY} px-2 font-medium`}>语言</th>
-              <th className={`${TH_STICKY} px-2 text-center font-medium`}>中文</th>
-              <th className={`${TH_STICKY} px-2 text-center font-medium`}>拉丁</th>
-              <th className={`${TH_STICKY} px-2 text-center font-medium`}>数字</th>
-              <th className={`${TH_STICKY} px-2 font-medium`}>数字风格</th>
-              <th className={`${TH_STICKY} px-2 text-center font-medium`}>表格数字</th>
-              <th className={`${TH_STICKY} px-2 text-center font-medium`}>等宽</th>
-              <th className={`${TH_STICKY} px-2 text-center font-medium`}>粗体</th>
-              <th className={`${TH_STICKY} px-2 text-center font-medium`}>斜体</th>
-              <th className={`${TH_STICKY} px-2 text-center font-medium`}>小型大写</th>
-              <th className={`${TH_STICKY} px-3 font-medium`}>可用字重</th>
-              <th className={`${TH_STICKY} px-2 font-medium`}>可变轴</th>
+              {activeCols.map((c) => (
+                <th key={c.key} className={`${TH_STICKY} px-2 font-medium ${c.center ? 'text-center' : ''}`}>
+                  {c.label}
+                </th>
+              ))}
               <th className={`${TH_STICKY} px-3 text-right font-medium`}>操作</th>
             </tr>
           </thead>
@@ -365,49 +572,9 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                         </div>
                       </div>
                     </td>
-                    <td className="max-w-28 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400" title={cat?.cl?.join(' / ')}>
-                      {cat?.cl?.length ? cat.cl.join('/') : '—'}
-                    </td>
-                    <td className="max-w-28 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400" title={cat?.s?.join(' ')}>
-                      {langLabel(cat?.s, cat?.pl)}
-                    </td>
-                    <td className="px-2 text-center">
-                      <Tri v={r.cjk} />
-                    </td>
-                    <td className="px-2 text-center">
-                      <Tri v={r.latin} />
-                    </td>
-                    <td className="px-2 text-center">
-                      <Tri v={r.digits} />
-                    </td>
-                    <td
-                      className="max-w-32 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400"
-                      title="默认数字风格 / 是否支持旧式数字（onum 特性）"
-                    >
-                      {figuresLabel(r)}
-                    </td>
-                    <td className="px-2 text-center" title="是否支持表格数字（tnum，数字等宽对齐）">
-                      <Tri v={r.tnum} />
-                    </td>
-                    <td className="px-2 text-center">
-                      <Tri v={r.monospace} />
-                    </td>
-                    <td className="px-2 text-center">
-                      <Tri v={r.bold} />
-                    </td>
-                    <td className="px-2 text-center">
-                      <Tri v={r.italic} />
-                    </td>
-                    <td className="px-2 text-center" title="是否支持真实小型大写字母（smcp）">
-                      <Tri v={r.smcp} />
-                    </td>
-                    <td className="px-3 text-xs text-zinc-500 tabular-nums dark:text-zinc-400">{weightsLabel(r)}</td>
-                    <td
-                      className="max-w-28 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400"
-                      title={cat?.ax?.join(' / ')}
-                    >
-                      {cat?.ax?.length ? cat.ax.map((a) => a.split(' ')[0]).join('/') : '—'}
-                    </td>
+                    {activeCols.map((c) => (
+                      <Cell key={c.key} col={c} r={r} cat={cat ?? undefined} />
+                    ))}
                     <td className="px-3 text-right">
                       {r.available ? (
                         <button
@@ -434,7 +601,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                   </tr>
                   {isOpen && cat && (
                     <tr className="border-b border-zinc-100 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-800/30">
-                      <td colSpan={15} className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
+                      <td colSpan={colCount} className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
                         {cat.desc && <p className="mb-1.5 max-w-3xl leading-5">{cat.desc}</p>}
                         <p className="flex flex-wrap gap-x-4 gap-y-1">
                           {cat.d && cat.d.length > 0 && <span>设计师：{cat.d.join('、')}</span>}
@@ -452,7 +619,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
             })}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={15} className="px-3 py-10 text-center text-sm text-zinc-400">
+                <td colSpan={colCount} className="px-3 py-10 text-center text-sm text-zinc-400">
                   没有匹配的字体
                 </td>
               </tr>
