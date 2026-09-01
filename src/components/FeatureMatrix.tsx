@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { catalogFeatures, css2Query, loadCatalog } from '../catalog'
+import { catalogFeatures, css2Query, loadCatalog, loadFeatures } from '../catalog'
 import type { CatalogFont } from '../catalog'
 import { allFontEntries } from '../data'
 import { detectFont } from '../detect'
@@ -77,8 +77,25 @@ function langLabel(subsets: string[] | undefined, pl?: string): string {
 function figuresLabel(r: FontFeatureResult): string {
   if (!r.available || !r.figures) return '—'
   const f = r.figures
+  if (f.def === 'unknown') return f.onum === 'yes' ? '支持旧式' : '—'
   if (f.def === 'oldstyle') return f.onum === 'yes' ? '旧式·可齐线' : '旧式'
   return f.onum === 'yes' ? '齐线·可旧式' : '齐线'
+}
+
+function applyFeatures(r: FontFeatureResult, ft: string[]): FontFeatureResult {
+  const has = (f: string): TriState => (ft.includes(f) ? 'yes' : 'no')
+  const onum = has('onum')
+  return {
+    ...r,
+    liga: has('liga'),
+    tnum: has('tnum'),
+    smcp: has('smcp'),
+    frac: has('frac'),
+    sups: has('sups'),
+    subs: has('subs'),
+    ordn: has('ordn'),
+    figures: r.figures ? { ...r.figures, onum } : { def: 'unknown', onum },
+  }
 }
 
 function weightsLabel(r: FontFeatureResult): string {
@@ -255,6 +272,7 @@ function Cell({ col, r, cat }: { col: ColDef; r: FontFeatureResult; cat?: Catalo
 
 export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUseFont, onToast }: Props) {
   const [catalog, setCatalog] = useState<CatalogFont[]>([])
+  const [featuresMap, setFeaturesMap] = useState<Map<string, string[]> | null>(null)
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<'all' | FontSource>('all')
   const [showUnavailable, setShowUnavailable] = useState(false)
@@ -327,16 +345,29 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
     loadCatalog().then((c) => {
       if (alive) setCatalog(c?.fonts ?? [])
     })
+    loadFeatures().then((m) => {
+      if (alive) setFeaturesMap(m)
+    })
     return () => {
       alive = false
     }
   }, [])
+
+  const customFt = useMemo(() => {
+    const m = new Map<string, string[]>()
+    customFonts.forEach((c) => {
+      if (c.ft) m.set(c.name.toLowerCase(), c.ft)
+    })
+    return m
+  }, [customFonts])
 
   const live = useMemo(
     () =>
       allFontEntries(customFonts).map((e) => {
         let r = detectFont(e.family, e.source)
         const key = e.family.toLowerCase()
+        const cft = customFt.get(key)
+        if (cft) r = applyFeatures(r, cft)
         if (r.available && r.source === 'local' && localInfo) {
           const info = localInfo.get(key)
           if (info) {
@@ -369,7 +400,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
       }),
     // fontTick 变化代表字体加载状态更新，需要重新检测
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [customFonts, fontTick, localInfo, localAnalysis],
+    [customFonts, fontTick, localInfo, localAnalysis, customFt],
   )
 
   const catalogMap = useMemo(() => new Map(catalog.map((f) => [f.f.toLowerCase(), f])), [catalog])
@@ -377,11 +408,16 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   const rows = useMemo(() => {
     const seen = new Set<string>()
     const withMeta = (r: FontFeatureResult): FontFeatureResult => {
-      if (!r.available && r.source === 'google') {
-        const entry = catalogMap.get(r.family.toLowerCase())
-        if (entry) return catalogFeatures(entry)
+      let out = r
+      if (!out.available && out.source === 'google') {
+        const entry = catalogMap.get(out.family.toLowerCase())
+        if (entry) out = catalogFeatures(entry)
       }
-      return r
+      if (out.source === 'google') {
+        const ft = featuresMap?.get(out.family.toLowerCase())
+        if (ft) out = applyFeatures(out, ft)
+      }
+      return out
     }
     const enriched = live.map((r) => {
       seen.add(r.family.toLowerCase())
@@ -391,7 +427,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
       .filter((f) => !seen.has(f.f.toLowerCase()))
       .map((f) => withMeta(detectFont(f.f, 'google')))
     return [...enriched, ...extra]
-  }, [live, catalog, catalogMap])
+  }, [live, catalog, catalogMap, featuresMap])
 
   const rankOf = (family: string) => catalogMap.get(family.toLowerCase())?.r
 

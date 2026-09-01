@@ -32,6 +32,21 @@ export function loadCatalog(): Promise<Catalog | null> {
   return cached
 }
 
+let cachedFeatures: Promise<Map<string, string[]> | null> | null = null
+
+export function loadFeatures(): Promise<Map<string, string[]> | null> {
+  if (!cachedFeatures) {
+    cachedFeatures = fetch(import.meta.env.BASE_URL + 'google-fonts-features.json')
+      .then(async (res) => {
+        if (!res.ok) return null
+        const d = (await res.json()) as { fonts: Record<string, { ft: string[] }> }
+        return new Map(Object.entries(d.fonts).map(([k, v]) => [k, v.ft]))
+      })
+      .catch(() => null)
+  }
+  return cachedFeatures
+}
+
 function parseVariants(font: CatalogFont): { weights: number[]; hasItalic: boolean } {
   const weights = new Set<number>()
   let hasItalic = false

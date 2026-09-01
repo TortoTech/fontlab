@@ -28,6 +28,7 @@ export interface CustomFont {
   name: string
   href?: string
   css?: string
+  ft?: string[]
 }
 
 export interface Sample {

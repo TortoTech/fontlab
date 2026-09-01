@@ -26,6 +26,18 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Restore Google Fonts ttf cache
+        uses: actions/cache@v4
+        with:
+          path: gf-ttf-cache
+          key: gf-ttf-v1-${{ github.run_id }}
+          restore-keys: |
+            gf-ttf-v1-
+      - name: Analyze Google Fonts features (offline)
+        env:
+          GOOGLE_FONTS_API_KEY: ${{ secrets.GOOGLE_FONTS_API_KEY }}
+          GF_TTF_DIR: gf-ttf-cache
+        run: node scripts/analyze-google-fonts.mjs
       - name: Fetch Google Fonts descriptions (sparse clone)
         continue-on-error: true
         run: |

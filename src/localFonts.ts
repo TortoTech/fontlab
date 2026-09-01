@@ -121,3 +121,18 @@ export const LOCAL_ZH_FAMILIES: string[] = FONT_GROUPS[0].fonts.map((f) => f.toL
 export const LOCAL_CURATED_FAMILIES: string[] = FONT_GROUPS.flatMap((g) =>
   g.fonts.map((f) => f.toLowerCase()),
 )
+
+export const FEATURE_TAGS = ['liga', 'tnum', 'onum', 'lnum', 'smcp', 'frac', 'sups', 'subs', 'ordn']
+
+export async function featuresFromBuffer(buf: ArrayBuffer): Promise<string[] | null> {
+  try {
+    const { create } = await import('fontkit')
+    const created = create(new Uint8Array(buf)) as ParsedFontLike | { fonts: ParsedFontLike[] }
+    const fonts = 'fonts' in created ? created.fonts : [created]
+    const feats = new Set<string>()
+    fonts.forEach((f) => f.availableFeatures.forEach((x) => feats.add(x)))
+    return FEATURE_TAGS.filter((f) => feats.has(f))
+  } catch {
+    return null
+  }
+}
