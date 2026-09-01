@@ -10,6 +10,8 @@ export interface CatalogFont {
   y?: string
   cl?: string[]
   desc?: string
+  ps?: string
+  pl?: string
 }
 
 export interface Catalog {

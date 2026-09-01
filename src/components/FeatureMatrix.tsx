@@ -273,12 +273,11 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
       </div>
 
       <div className="max-h-[75vh] overflow-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full min-w-[1040px] border-collapse text-sm">
+        <table className="w-full min-w-[960px] border-collapse text-sm">
           <thead>
             <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
               <th className={`${TH_STICKY} left-0 z-20 px-3 font-medium`}>字体</th>
               <th className={`${TH_STICKY} px-2 font-medium`}>热度</th>
-              <th className={`${TH_STICKY} px-2 font-medium`}>设计师</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>等宽</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>中文</th>
               <th className={`${TH_STICKY} px-2 text-center font-medium`}>拉丁</th>
@@ -329,9 +328,6 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                     <td className="px-2 text-xs text-zinc-400 tabular-nums dark:text-zinc-500">
                       {rank ? `#${rank}` : '—'}
                     </td>
-                    <td className="max-w-32 truncate px-2 text-xs text-zinc-500 dark:text-zinc-400">
-                      {cat?.d?.length ? (cat.d.length > 1 ? `${cat.d[0]} +${cat.d.length - 1}` : cat.d[0]) : '—'}
-                    </td>
                     <td className="px-2 text-center">
                       <Tri v={r.monospace} />
                     </td>
@@ -377,11 +373,14 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                   </tr>
                   {isOpen && cat && (
                     <tr className="border-b border-zinc-100 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-800/30">
-                      <td colSpan={11} className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
+                      <td colSpan={10} className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
                         {cat.desc && <p className="mb-1.5 max-w-3xl leading-5">{cat.desc}</p>}
                         <p className="flex flex-wrap gap-x-4 gap-y-1">
                           {cat.d && cat.d.length > 0 && <span>设计师：{cat.d.join('、')}</span>}
                           {cat.cl && cat.cl.length > 0 && <span>风格：{cat.cl.join(' / ')}</span>}
+                          {(cat.ps || cat.pl) && (
+                            <span>主要文字/语言：{[cat.ps, cat.pl].filter(Boolean).join(' / ')}</span>
+                          )}
                           {cat.y && <span>收录于 {cat.y}</span>}
                         </p>
                       </td>
@@ -392,7 +391,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
             })}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-3 py-10 text-center text-sm text-zinc-400">
+                <td colSpan={10} className="px-3 py-10 text-center text-sm text-zinc-400">
                   没有匹配的字体
                 </td>
               </tr>
