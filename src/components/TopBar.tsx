@@ -19,8 +19,7 @@ export default function TopBar({ onAddFont, onReset }: Props) {
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
           Aa
         </span>
-        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">字体搭配实验室</h1>
-        <span className="hidden text-xs text-zinc-400 md:inline dark:text-zinc-500">FontLab</span>
+        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">FontLab</h1>
         <nav className="ml-2 flex items-center gap-1">
           <NavLink to="/" end className={navCls}>
             字体对比

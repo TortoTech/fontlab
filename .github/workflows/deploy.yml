@@ -26,9 +26,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Fetch Google Fonts descriptions (sparse clone)
+        continue-on-error: true
+        run: |
+          git clone --filter=blob:none --no-checkout --depth 1 https://github.com/google/fonts gf-repo
+          git -C gf-repo sparse-checkout set --no-cone '*/DESCRIPTION.en.html'
+          git -C gf-repo checkout
       - name: Fetch Google Fonts catalog
         env:
           GOOGLE_FONTS_API_KEY: ${{ secrets.GOOGLE_FONTS_API_KEY }}
+          GF_DESC_DIR: gf-repo
         run: node scripts/fetch-google-fonts.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v4

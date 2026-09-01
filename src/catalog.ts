@@ -6,6 +6,10 @@ export interface CatalogFont {
   v: string[]
   s: string[]
   r: number
+  d?: string[]
+  y?: string
+  cl?: string[]
+  desc?: string
 }
 
 export interface Catalog {
