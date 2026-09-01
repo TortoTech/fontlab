@@ -25,7 +25,7 @@ let cached: Promise<Catalog | null> | null = null
 
 export function loadCatalog(): Promise<Catalog | null> {
   if (!cached) {
-    cached = fetch(import.meta.env.BASE_URL + 'google-fonts-catalog.json')
+    cached = fetch(import.meta.env.BASE_URL + 'google-fonts-catalog.json', { cache: 'no-store' })
       .then((res) => (res.ok ? (res.json() as Promise<Catalog>) : null))
       .catch(() => null)
   }
@@ -45,7 +45,7 @@ let cachedFeatures: Promise<Map<string, OfflineFeatures> | null> | null = null
 
 export function loadFeatures(): Promise<Map<string, OfflineFeatures> | null> {
   if (!cachedFeatures) {
-    cachedFeatures = fetch(import.meta.env.BASE_URL + 'google-fonts-features.json')
+    cachedFeatures = fetch(import.meta.env.BASE_URL + 'google-fonts-features.json', { cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) return null
         const d = (await res.json()) as { fonts: Record<string, OfflineFeatures> }

@@ -76,7 +76,7 @@ function langLabel(subsets: string[] | undefined, pl?: string): string {
 }
 
 function figuresLabel(r: FontFeatureResult): string {
-  if (!r.available || !r.figures) return '—'
+  if (!r.figures) return '—'
   const f = r.figures
   if (f.def === 'unknown') return f.onum === 'yes' ? '支持旧式' : '—'
   if (f.def === 'oldstyle') return f.onum === 'yes' ? '旧式·可齐线' : '旧式'
