@@ -30,7 +30,7 @@ jobs:
         continue-on-error: true
         run: |
           git clone --filter=blob:none --no-checkout --depth 1 https://github.com/google/fonts gf-repo
-          git -C gf-repo sparse-checkout set --no-cone '*/DESCRIPTION.en.html'
+          git -C gf-repo sparse-checkout set --no-cone '**/DESCRIPTION.*.html'
           git -C gf-repo checkout
       - name: Fetch Google Fonts catalog
         env:

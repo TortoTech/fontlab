@@ -21,10 +21,18 @@ function loadDescriptions() {
     }
     for (const d of dirs) {
       if (!d.isDirectory()) continue
-      const file = join(root, lic.name, d.name, 'DESCRIPTION.en.html')
-      if (!existsSync(file)) continue
+      const famDir = join(root, lic.name, d.name)
+      let files = []
       try {
-        const text = readFileSync(file, 'utf8')
+        files = readdirSync(famDir)
+      } catch {
+        continue
+      }
+      const descFiles = files.filter((f) => /^DESCRIPTION\..+\.html$/.test(f))
+      const descFile = descFiles.find((f) => f.includes('en')) ?? descFiles[0]
+      if (!descFile) continue
+      try {
+        const text = readFileSync(join(famDir, descFile), 'utf8')
           .replace(/<[^>]*>/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
