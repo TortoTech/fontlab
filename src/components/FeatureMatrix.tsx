@@ -38,6 +38,11 @@ const SOURCE_CLS: Record<FontSource, string> = {
 
 const PAGE_SIZE = 300
 
+const TH_STICKY =
+  'sticky top-0 z-10 bg-white py-2.5 shadow-[inset_0_-1px_0_#e4e4e7] dark:bg-zinc-900 dark:shadow-[inset_0_-1px_0_#27272a]'
+const TD_STICKY =
+  'sticky left-0 z-10 bg-white group-hover:bg-zinc-50 dark:bg-zinc-900 dark:group-hover:bg-zinc-800'
+
 function Tri({ v }: { v: TriState }) {
   const m = TRI_META[v]
   return (
@@ -266,20 +271,20 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="max-h-[75vh] overflow-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <table className="w-full min-w-[960px] border-collapse text-sm">
           <thead>
-            <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-              <th className="px-3 py-2.5 font-medium">字体</th>
-              <th className="px-2 py-2.5 font-medium">热度</th>
-              <th className="px-2 py-2.5 text-center font-medium">等宽</th>
-              <th className="px-2 py-2.5 text-center font-medium">中文</th>
-              <th className="px-2 py-2.5 text-center font-medium">拉丁</th>
-              <th className="px-2 py-2.5 text-center font-medium">数字</th>
-              <th className="px-2 py-2.5 text-center font-medium">粗体</th>
-              <th className="px-2 py-2.5 text-center font-medium">斜体</th>
-              <th className="px-3 py-2.5 font-medium">可用字重</th>
-              <th className="px-3 py-2.5 text-right font-medium">操作</th>
+            <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
+              <th className={`${TH_STICKY} left-0 z-20 px-3 font-medium`}>字体</th>
+              <th className={`${TH_STICKY} px-2 font-medium`}>热度</th>
+              <th className={`${TH_STICKY} px-2 text-center font-medium`}>等宽</th>
+              <th className={`${TH_STICKY} px-2 text-center font-medium`}>中文</th>
+              <th className={`${TH_STICKY} px-2 text-center font-medium`}>拉丁</th>
+              <th className={`${TH_STICKY} px-2 text-center font-medium`}>数字</th>
+              <th className={`${TH_STICKY} px-2 text-center font-medium`}>粗体</th>
+              <th className={`${TH_STICKY} px-2 text-center font-medium`}>斜体</th>
+              <th className={`${TH_STICKY} px-3 font-medium`}>可用字重</th>
+              <th className={`${TH_STICKY} px-3 text-right font-medium`}>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -288,11 +293,11 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
               return (
                 <tr
                   key={r.family}
-                  className={`border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50 ${
+                  className={`group border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50 ${
                     r.available ? '' : 'opacity-70'
                   }`}
                 >
-                  <td className="px-3 py-2">
+                  <td className={`${TD_STICKY} px-3 py-2`}>
                     <div className="flex items-center gap-3">
                       <span
                         className="w-28 shrink-0 truncate text-lg text-zinc-800 dark:text-zinc-200"
