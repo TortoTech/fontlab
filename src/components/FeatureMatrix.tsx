@@ -83,12 +83,20 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   const catalogMap = useMemo(() => new Map(catalog.map((f) => [f.f.toLowerCase(), f])), [catalog])
 
   const rows = useMemo(() => {
-    const seen = new Set(live.map((r) => r.family.toLowerCase()))
+    const seen = new Set<string>()
+    const enriched = live.map((r) => {
+      seen.add(r.family.toLowerCase())
+      if (!r.available && r.source === 'google') {
+        const entry = catalogMap.get(r.family.toLowerCase())
+        if (entry) return catalogFeatures(entry)
+      }
+      return r
+    })
     const extra = catalog
       .filter((f) => !seen.has(f.f.toLowerCase()))
       .map((f) => (fontAvailable(f.f) ? detectFont(f.f, 'google') : catalogFeatures(f)))
-    return [...live, ...extra]
-  }, [live, catalog])
+    return [...enriched, ...extra]
+  }, [live, catalog, catalogMap])
 
   const rankOf = (family: string) => catalogMap.get(family.toLowerCase())?.r
 
