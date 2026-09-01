@@ -13,6 +13,8 @@ export interface FontFeatureResult {
   digits: TriState
   bold: TriState
   italic: TriState
+  tnum: TriState
+  smcp: TriState
   weights: number[]
   isVariable: boolean
   figures?: FiguresInfo
@@ -120,6 +122,37 @@ export function detectFigures(family: string): FiguresInfo {
   return { def: defOld ? 'oldstyle' : 'lining', onum: hasOnum ? 'yes' : 'no' }
 }
 
+let featSpan: HTMLSpanElement | null = null
+
+function featWidth(family: string, featureSettings: string, text: string): number {
+  if (!featSpan) {
+    featSpan = document.createElement('span')
+    featSpan.style.cssText =
+      'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;font-size:48px;'
+    document.body.appendChild(featSpan)
+  }
+  featSpan.textContent = text
+  featSpan.style.fontFamily = `"${family}"`
+  featSpan.style.fontFeatureSettings = featureSettings
+  return featSpan.getBoundingClientRect().width
+}
+
+export function detectTnum(family: string): TriState {
+  const t = '0123456789'
+  const wN = featWidth(family, 'normal', t)
+  const wT = featWidth(family, '"tnum"', t)
+  const wP = featWidth(family, '"pnum"', t)
+  const eps = 0.01
+  return Math.abs(wT - wP) > eps || Math.abs(wN - wP) > eps ? 'yes' : 'no'
+}
+
+export function detectSmcp(family: string): TriState {
+  const t = 'abcdefghij'
+  const wN = featWidth(family, 'normal', t)
+  const wS = featWidth(family, '"smcp"', t)
+  return Math.abs(wS - wN) > 0.01 ? 'yes' : 'no'
+}
+
 export function detectFont(family: string, source: FontSource): FontFeatureResult {
   const available = fontExists(family)
   const faces = available ? enumerateFaces(family) : null
@@ -147,5 +180,7 @@ export function detectFont(family: string, source: FontSource): FontFeatureResul
     weights: faces?.weights ?? [],
     isVariable: faces?.isVariable ?? false,
     figures: available ? detectFigures(family) : undefined,
+    tnum: available ? detectTnum(family) : 'unknown',
+    smcp: available ? detectSmcp(family) : 'unknown',
   }
 }

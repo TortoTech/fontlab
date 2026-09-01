@@ -12,6 +12,7 @@ export interface CatalogFont {
   desc?: string
   ps?: string
   pl?: string
+  ax?: string[]
 }
 
 export interface Catalog {
@@ -56,6 +57,8 @@ export function catalogFeatures(font: CatalogFont): FontFeatureResult {
     digits: latin ? 'yes' : 'unknown',
     bold: weights.some((w) => w >= 600) ? 'yes' : 'no',
     italic: hasItalic ? 'yes' : 'no',
+    tnum: 'unknown',
+    smcp: 'unknown',
     weights,
     isVariable: false,
   }

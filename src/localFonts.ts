@@ -73,6 +73,8 @@ interface ParsedFontLike {
 export interface LocalFontAnalysis {
   cjk: boolean | null
   onum: boolean | null
+  tnum: boolean | null
+  smcp: boolean | null
 }
 
 export async function analyzeLocalFont(getBlob: () => Promise<Blob>): Promise<LocalFontAnalysis> {
@@ -86,9 +88,11 @@ export async function analyzeLocalFont(getBlob: () => Promise<Blob>): Promise<Lo
     return {
       cjk: fonts.some((f) => f.hasGlyphForCodePoint(0x4e2d)),
       onum: feats.has('onum') ? true : feats.has('lnum') ? false : null,
+      tnum: feats.has('tnum') ? true : feats.has('pnum') ? false : null,
+      smcp: feats.has('smcp') ? true : false,
     }
   } catch {
-    return { cjk: null, onum: null }
+    return { cjk: null, onum: null, tnum: null, smcp: null }
   }
 }
 

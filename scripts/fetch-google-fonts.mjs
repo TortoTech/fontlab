@@ -76,6 +76,7 @@ async function fetchMetadata() {
     cl: it.classifications || [],
     ps: it.primaryScript || '',
     pl: it.primaryLanguage || '',
+    ax: (it.axes || []).map((a) => a.tag + (a.start != null ? ' ' + a.start + '–' + a.end : '')),
   }))
   fonts.sort((a, b) => a.r - b.r)
   return { source: 'fonts.google.com/metadata', fonts }
