@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '30 4 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -24,6 +26,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Fetch Google Fonts catalog
+        env:
+          GOOGLE_FONTS_API_KEY: ${{ secrets.GOOGLE_FONTS_API_KEY }}
+        run: node scripts/fetch-google-fonts.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v4
         with:

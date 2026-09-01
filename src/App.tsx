@@ -156,11 +156,11 @@ export default function App() {
     location.reload()
   }
 
-  const loadGoogleForMatrix = async (family: string): Promise<boolean> => {
-    const query = GOOGLE_FONT_MAP.get(family)
-    if (!query) return false
+  const loadGoogleForMatrix = async (family: string, query?: string): Promise<boolean> => {
+    const q = query ?? GOOGLE_FONT_MAP.get(family)
+    if (!q) return false
     try {
-      await loadGoogleFont(family, query)
+      await loadGoogleFont(family, q)
       googleTried.current.delete(family)
       setFontTick((t) => t + 1)
       return true
