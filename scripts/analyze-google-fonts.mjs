@@ -33,10 +33,12 @@ mkdirSync(cacheDir, { recursive: true })
 const fontkitMod = await import('fontkit')
 const fontkit = fontkitMod.default ?? fontkitMod
 
-const tasks = items.map((it) => ({
-  family: it.family,
-  url: it.files?.regular ?? Object.values(it.files ?? {})[0],
-}))
+const tasks = items
+  .filter((it) => !/material (icons|symbols)/i.test(it.family))
+  .map((it) => ({
+    family: it.family,
+    url: it.files?.regular ?? Object.values(it.files ?? {})[0],
+  }))
 
 const results = {}
 let done = 0
@@ -54,7 +56,30 @@ async function processOne({ family, url }) {
     }
     const font = fontkit.create(new Uint8Array(readFileSync(file)))
     const feats = font.availableFeatures ?? []
-    results[family.toLowerCase()] = { ft: TRACK.filter((f) => feats.includes(f)) }
+    const entry = { ft: TRACK.filter((f) => feats.includes(f)) }
+    try {
+      const g = (cp) => font.glyphForCodePoint(cp).bbox
+      const capH = g(72).maxY
+      const xH = g(120).maxY
+      if (capH > 0 && xH > 0) {
+        const zero = g(48)
+        const hasDesc = [51, 52, 53, 55, 57].some((cp) => g(cp).minY < -5)
+        entry.fd = zero.maxY < (xH + capH) / 2 || hasDesc ? 'oldstyle' : 'lining'
+      }
+    } catch {
+      // 取不到轮廓时不写默认数字风格
+    }
+    try {
+      entry.cjk = font.hasGlyphForCodePoint(0x4e2d)
+      entry.lat = font.hasGlyphForCodePoint(0x41) && font.hasGlyphForCodePoint(0x61)
+      entry.dig = font.hasGlyphForCodePoint(0x30)
+      const ai = font.glyphForCodePoint(0x69).advanceWidth
+      const aw = font.glyphForCodePoint(0x57).advanceWidth
+      if (ai > 0 && aw > 0) entry.mono = ai === aw
+    } catch {
+      // 取不到字形度量时跳过
+    }
+    results[family.toLowerCase()] = entry
   } catch (err) {
     failed++
     if (failed <= 5) console.warn('[analyze-google-fonts] ' + family + ' 解析失败: ' + (err?.message ?? err))

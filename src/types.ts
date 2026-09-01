@@ -29,6 +29,7 @@ export interface CustomFont {
   href?: string
   css?: string
   ft?: string[]
+  fd?: 'lining' | 'oldstyle'
 }
 
 export interface Sample {

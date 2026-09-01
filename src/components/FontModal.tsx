@@ -52,17 +52,18 @@ export default function FontModal({ customFonts, onClose, onAdd, onRemove }: Pro
         const family = name.trim()
         if (!family) throw new Error('请先填写「字体族名称」')
         if (!files?.length) throw new Error('请选择字体文件')
-        let ft: string[] | undefined
+        let ff: { ft: string[]; fd?: 'lining' | 'oldstyle' } | null = null
         for (const file of Array.from(files)) {
           const buf = await file.arrayBuffer()
-          if (!ft) ft = (await featuresFromBuffer(buf)) ?? undefined
+          if (!ff) ff = await featuresFromBuffer(buf)
           const b64 = bufToBase64(buf)
           const mime = file.type || guessMime(file.name)
           await onAdd({
             kind: 'css',
             name: family,
             css: `@font-face{font-family:"${family}";src:url(data:${mime};base64,${b64});font-display:swap;}`,
-            ft,
+            ft: ff?.ft,
+            fd: ff?.fd,
           })
         }
         setStatus({ ok: true, msg: `已加载「${family}」（${files.length} 个文件）` })

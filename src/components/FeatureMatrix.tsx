@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { catalogFeatures, css2Query, loadCatalog, loadFeatures } from '../catalog'
+import type { OfflineFeatures } from '../catalog'
 import type { CatalogFont } from '../catalog'
 import { allFontEntries } from '../data'
 import { detectFont } from '../detect'
@@ -82,11 +83,15 @@ function figuresLabel(r: FontFeatureResult): string {
   return f.onum === 'yes' ? '齐线·可旧式' : '齐线'
 }
 
-function applyFeatures(r: FontFeatureResult, ft: string[]): FontFeatureResult {
-  const has = (f: string): TriState => (ft.includes(f) ? 'yes' : 'no')
+function applyFeatures(r: FontFeatureResult, f: OfflineFeatures): FontFeatureResult {
+  const has = (t: string): TriState => (f.ft.includes(t) ? 'yes' : 'no')
   const onum = has('onum')
   return {
     ...r,
+    cjk: f.cjk !== undefined ? (f.cjk ? 'yes' : 'no') : r.cjk,
+    latin: f.lat !== undefined ? (f.lat ? 'yes' : 'no') : r.latin,
+    digits: f.dig !== undefined ? (f.dig ? 'yes' : 'no') : r.digits,
+    monospace: f.mono !== undefined ? (f.mono ? 'yes' : 'no') : r.monospace,
     liga: has('liga'),
     tnum: has('tnum'),
     smcp: has('smcp'),
@@ -94,7 +99,7 @@ function applyFeatures(r: FontFeatureResult, ft: string[]): FontFeatureResult {
     sups: has('sups'),
     subs: has('subs'),
     ordn: has('ordn'),
-    figures: r.figures ? { ...r.figures, onum } : { def: 'unknown', onum },
+    figures: r.figures ? { ...r.figures, onum } : { def: f.fd ?? 'unknown', onum },
   }
 }
 
@@ -272,7 +277,7 @@ function Cell({ col, r, cat }: { col: ColDef; r: FontFeatureResult; cat?: Catalo
 
 export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUseFont, onToast }: Props) {
   const [catalog, setCatalog] = useState<CatalogFont[]>([])
-  const [featuresMap, setFeaturesMap] = useState<Map<string, string[]> | null>(null)
+  const [featuresMap, setFeaturesMap] = useState<Map<string, OfflineFeatures> | null>(null)
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<'all' | FontSource>('all')
   const [showUnavailable, setShowUnavailable] = useState(false)
@@ -354,9 +359,9 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   }, [])
 
   const customFt = useMemo(() => {
-    const m = new Map<string, string[]>()
+    const m = new Map<string, OfflineFeatures>()
     customFonts.forEach((c) => {
-      if (c.ft) m.set(c.name.toLowerCase(), c.ft)
+      if (c.ft) m.set(c.name.toLowerCase(), { ft: c.ft, fd: c.fd })
     })
     return m
   }, [customFonts])

@@ -124,14 +124,34 @@ export const LOCAL_CURATED_FAMILIES: string[] = FONT_GROUPS.flatMap((g) =>
 
 export const FEATURE_TAGS = ['liga', 'tnum', 'onum', 'lnum', 'smcp', 'frac', 'sups', 'subs', 'ordn']
 
-export async function featuresFromBuffer(buf: ArrayBuffer): Promise<string[] | null> {
+export interface FontFeatures {
+  ft: string[]
+  fd?: 'lining' | 'oldstyle'
+}
+
+export async function featuresFromBuffer(buf: ArrayBuffer): Promise<FontFeatures | null> {
   try {
     const { create } = await import('fontkit')
     const created = create(new Uint8Array(buf)) as ParsedFontLike | { fonts: ParsedFontLike[] }
     const fonts = 'fonts' in created ? created.fonts : [created]
     const feats = new Set<string>()
     fonts.forEach((f) => f.availableFeatures.forEach((x) => feats.add(x)))
-    return FEATURE_TAGS.filter((f) => feats.has(f))
+    const result: FontFeatures = { ft: FEATURE_TAGS.filter((f) => feats.has(f)) }
+    try {
+      const font = fonts[0] as unknown as {
+        glyphForCodePoint: (cp: number) => { bbox: { maxX: number; maxY: number; minY: number } }
+      }
+      const capH = font.glyphForCodePoint(72).bbox.maxY
+      const xH = font.glyphForCodePoint(120).bbox.maxY
+      if (capH > 0 && xH > 0) {
+        const zero = font.glyphForCodePoint(48).bbox
+        const hasDesc = [51, 52, 53, 55, 57].some((cp) => font.glyphForCodePoint(cp).bbox.minY < -5)
+        result.fd = zero.maxY < (xH + capH) / 2 || hasDesc ? 'oldstyle' : 'lining'
+      }
+    } catch {
+      // 取不到轮廓时不写默认数字风格
+    }
+    return result
   } catch {
     return null
   }

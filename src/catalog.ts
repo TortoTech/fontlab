@@ -32,15 +32,24 @@ export function loadCatalog(): Promise<Catalog | null> {
   return cached
 }
 
-let cachedFeatures: Promise<Map<string, string[]> | null> | null = null
+export interface OfflineFeatures {
+  ft: string[]
+  fd?: 'lining' | 'oldstyle'
+  cjk?: boolean
+  lat?: boolean
+  dig?: boolean
+  mono?: boolean
+}
 
-export function loadFeatures(): Promise<Map<string, string[]> | null> {
+let cachedFeatures: Promise<Map<string, OfflineFeatures> | null> | null = null
+
+export function loadFeatures(): Promise<Map<string, OfflineFeatures> | null> {
   if (!cachedFeatures) {
     cachedFeatures = fetch(import.meta.env.BASE_URL + 'google-fonts-features.json')
       .then(async (res) => {
         if (!res.ok) return null
-        const d = (await res.json()) as { fonts: Record<string, { ft: string[] }> }
-        return new Map(Object.entries(d.fonts).map(([k, v]) => [k, v.ft]))
+        const d = (await res.json()) as { fonts: Record<string, OfflineFeatures> }
+        return new Map(Object.entries(d.fonts))
       })
       .catch(() => null)
   }
