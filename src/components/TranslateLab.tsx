@@ -138,15 +138,21 @@ function makeProvider(p: Provider) {
   })
 }
 
-function providerOptions(p: Provider, reasoning: string) {
-  return reasoning ? { [p.id]: { reasoningEffort: reasoning } } : undefined
+interface GenOpts {
+  reasoning: string
 }
 
-async function callChat(p: Provider, model: string, content: string, reasoning: string): Promise<string> {
+function genParams(p: Provider, o: GenOpts) {
+  return {
+    providerOptions: o.reasoning ? { [p.id]: { reasoningEffort: o.reasoning } } : undefined,
+  }
+}
+
+async function callChat(p: Provider, model: string, content: string, o: GenOpts): Promise<string> {
   const { text } = await generateText({
     model: makeProvider(p)(model),
     prompt: content,
-    providerOptions: providerOptions(p, reasoning),
+    ...genParams(p, o),
   })
   return text
 }
@@ -161,12 +167,12 @@ async function callChatStream(
   p: Provider,
   model: string,
   content: string,
-  reasoning: string,
+  o: GenOpts,
 ): Promise<StreamResult> {
   const result = streamText({
     model: makeProvider(p)(model),
     prompt: content,
-    providerOptions: providerOptions(p, reasoning),
+    ...genParams(p, o),
   })
   const t0 = performance.now()
   let ttft: number | null = null
@@ -303,6 +309,7 @@ export default function TranslateLab() {
       .map((k) => findModel(k))
       .filter((m): m is NonNullable<typeof m> => Boolean(m))
     if (picks.length === 0 || !settings.text.trim()) return
+    const genOpts: GenOpts = { reasoning: settings.reasoning }
     setRunning(true)
     setResults(
       picks.map((m, i) => ({
@@ -330,7 +337,7 @@ export default function TranslateLab() {
           let tps: number | null = null
           try {
             const t0 = performance.now()
-            const sr = await callChatStream(m.provider, m.model, content, settings.reasoning)
+            const sr = await callChatStream(m.provider, m.model, content, genOpts)
             const total = performance.now() - t0
             translation = sr.text
             ttft = sr.ttft
@@ -338,7 +345,7 @@ export default function TranslateLab() {
             const genMs = ttft !== null ? Math.max(total - ttft, 1) : total
             tps = Math.round((tokens * 1000) / genMs)
           } catch {
-            translation = await callChat(m.provider, m.model, content, settings.reasoning)
+            translation = await callChat(m.provider, m.model, content, genOpts)
           }
           patchResult(m.key, { translation, ttft, tps, status: judge ? 'judging' : 'done' })
           return { id, key: m.key, model: m.model, translation }
@@ -357,7 +364,7 @@ export default function TranslateLab() {
           .replace('{source}', settings.text)
           .replace('{translations}', block)
         try {
-          const out = await callChat(judge.provider, judge.model, content, settings.reasoning)
+          const out = await callChat(judge.provider, judge.model, content, { reasoning: '' })
           const byId = new Map(parseJudgeJson(out).map((e) => [String(e.id), e]))
           for (const o of doneOnes) {
             const e = byId.get(o.id)
@@ -564,13 +571,15 @@ export default function TranslateLab() {
             </div>
           </div>
           <label>
-            <span className={labelCls}>思考等级（reasoning effort，取决于提供商/模型支持）</span>
+            <span className={labelCls}>思考等级（仅测试模型，裁判不受影响；取决于提供商支持）</span>
             <select
               className={`${inputCls} w-full`}
               value={settings.reasoning}
               onChange={(e) => setSettings((s) => ({ ...s, reasoning: e.target.value }))}
             >
               <option value="">默认</option>
+              <option value="none">none（关闭）</option>
+              <option value="minimal">minimal</option>
               <option value="low">low</option>
               <option value="medium">medium</option>
               <option value="high">high</option>
