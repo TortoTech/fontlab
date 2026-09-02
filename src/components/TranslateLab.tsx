@@ -87,6 +87,14 @@ async function callChat(p: Provider, model: string, content: string): Promise<st
   return data.choices?.[0]?.message?.content ?? ''
 }
 
+async function listModels(p: Provider): Promise<string[]> {
+  const url = p.baseURL.replace(/\/+$/, '') + '/models'
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${p.apiKey}` } })
+  if (!res.ok) throw new Error(`HTTP ${res.status}：${(await res.text()).slice(0, 200)}`)
+  const data = (await res.json()) as { data?: { id: string }[] }
+  return (data.data ?? []).map((d) => d.id).sort((a, b) => a.localeCompare(b))
+}
+
 function parseScore(text: string): number | null {
   const m = text.match(/分数\s*[:：]\s*([\d.]+)/)
   if (!m) return null
@@ -107,6 +115,9 @@ export default function TranslateLab() {
   const [results, setResults] = useState<ResultItem[]>([])
   const [running, setRunning] = useState(false)
   const [showProviders, setShowProviders] = useState(providers.length === 0)
+  const [fetching, setFetching] = useState<Set<string>>(new Set())
+  const [fetchErr, setFetchErr] = useState<Record<string, string>>({})
+  const [modelQuery, setModelQuery] = useState('')
 
   useEffect(() => {
     localStorage.setItem(PROVIDERS_KEY, JSON.stringify(providers))
@@ -128,6 +139,23 @@ export default function TranslateLab() {
 
   const patchProvider = (id: string, patch: Partial<Provider>) =>
     setProviders((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+
+  const fetchModels = async (p: Provider) => {
+    setFetching((s) => new Set(s).add(p.id))
+    setFetchErr((m) => ({ ...m, [p.id]: '' }))
+    try {
+      const models = await listModels(p)
+      patchProvider(p.id, { models })
+    } catch (err) {
+      setFetchErr((m) => ({ ...m, [p.id]: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setFetching((s) => {
+        const n = new Set(s)
+        n.delete(p.id)
+        return n
+      })
+    }
+  }
 
   const patchResult = (key: string, patch: Partial<ResultItem>) =>
     setResults((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
@@ -219,23 +247,19 @@ export default function TranslateLab() {
                     </button>
                   </div>
                 </div>
-                <label className="mt-2 block">
-                  <span className={labelCls}>模型列表（每行一个）</span>
-                  <textarea
-                    className={`${areaCls} font-mono`}
-                    rows={3}
-                    placeholder={'gpt-4o\nclaude-sonnet-4-5\ngemini-2.5-pro'}
-                    value={p.models.join('\n')}
-                    onChange={(e) =>
-                      patchProvider(p.id, {
-                        models: e.target.value
-                          .split('\n')
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                  />
-                </label>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    className="h-8 rounded-md border border-zinc-300 px-3 text-sm text-zinc-600 hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+                    disabled={fetching.has(p.id) || !p.baseURL.trim()}
+                    onClick={() => void fetchModels(p)}
+                  >
+                    {fetching.has(p.id) ? '获取中…' : p.models.length ? '重新获取模型列表' : '获取模型列表'}
+                  </button>
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                    {p.models.length ? `${p.models.length} 个模型` : '未获取'}
+                  </span>
+                  {fetchErr[p.id] && <span className="text-xs text-red-500">{fetchErr[p.id]}</span>}
+                </div>
               </div>
             ))}
             <button
@@ -268,14 +292,21 @@ export default function TranslateLab() {
         </label>
         <div>
           <span className={labelCls}>测试模型（可多选）</span>
+          <input
+            className={`${inputCls} mb-1.5 w-full`}
+            placeholder="搜索模型…"
+            value={modelQuery}
+            onChange={(e) => setModelQuery(e.target.value)}
+          />
           <div className="max-h-40 overflow-y-auto rounded-md border border-zinc-200 p-2 dark:border-zinc-700">
-            {allModels.length === 0 && <p className="text-xs text-zinc-400">请先配置提供商与模型</p>}
-            {providers.map((p) =>
-              p.models.length ? (
+            {allModels.length === 0 && <p className="text-xs text-zinc-400">请先配置提供商并获取模型列表</p>}
+            {providers.map((p) => {
+              const shown = p.models.filter((m) => m.toLowerCase().includes(modelQuery.trim().toLowerCase()))
+              return shown.length ? (
                 <div key={p.id} className="mb-1.5">
                   <p className="mb-0.5 text-xs font-medium text-zinc-400">{p.name}</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-1">
-                    {p.models.map((m) => {
+                    {shown.map((m) => {
                       const key = `${p.id}::${m}`
                       return (
                         <label key={m} className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300">
@@ -296,8 +327,8 @@ export default function TranslateLab() {
                     })}
                   </div>
                 </div>
-              ) : null,
-            )}
+              ) : null
+            })}
           </div>
         </div>
         <div className="flex flex-col justify-end gap-2">
