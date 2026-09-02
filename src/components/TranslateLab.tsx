@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { generateText, streamText } from 'ai'
 import { jsonrepair } from 'jsonrepair'
 import { uid } from '../data'
 
@@ -89,6 +91,7 @@ interface Settings {
   judgePrompt: string
   selected: string[]
   judgeKey: string
+  reasoning: string
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -97,6 +100,7 @@ const DEFAULT_SETTINGS: Settings = {
   judgePrompt: DEFAULT_JUDGE_PROMPT,
   selected: [],
   judgeKey: '',
+  reasoning: '',
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -125,16 +129,26 @@ function loadProviders(): Provider[] {
   return []
 }
 
-async function callChat(p: Provider, model: string, content: string): Promise<string> {
-  const url = p.baseURL.replace(/\/+$/, '') + '/chat/completions'
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${p.apiKey}` },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content }] }),
+function makeProvider(p: Provider) {
+  return createOpenAICompatible({
+    name: p.id,
+    apiKey: p.apiKey,
+    baseURL: p.baseURL.replace(/\/+$/, ''),
+    includeUsage: true,
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}：${(await res.text()).slice(0, 200)}`)
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
-  return data.choices?.[0]?.message?.content ?? ''
+}
+
+function providerOptions(p: Provider, reasoning: string) {
+  return reasoning ? { [p.id]: { reasoningEffort: reasoning } } : undefined
+}
+
+async function callChat(p: Provider, model: string, content: string, reasoning: string): Promise<string> {
+  const { text } = await generateText({
+    model: makeProvider(p)(model),
+    prompt: content,
+    providerOptions: providerOptions(p, reasoning),
+  })
+  return text
 }
 
 interface StreamResult {
@@ -143,56 +157,27 @@ interface StreamResult {
   ttft: number | null
 }
 
-async function callChatStream(p: Provider, model: string, content: string): Promise<StreamResult> {
-  const url = p.baseURL.replace(/\/+$/, '') + '/chat/completions'
-  const t0 = performance.now()
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${p.apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content }],
-      stream: true,
-      stream_options: { include_usage: true },
-    }),
+async function callChatStream(
+  p: Provider,
+  model: string,
+  content: string,
+  reasoning: string,
+): Promise<StreamResult> {
+  const result = streamText({
+    model: makeProvider(p)(model),
+    prompt: content,
+    providerOptions: providerOptions(p, reasoning),
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}：${(await res.text()).slice(0, 200)}`)
-  const reader = res.body?.getReader()
-  if (!reader) throw new Error('不支持流式读取')
-  const decoder = new TextDecoder()
-  let buf = ''
-  let text = ''
+  const t0 = performance.now()
   let ttft: number | null = null
-  let completionTokens: number | null = null
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += decoder.decode(value, { stream: true })
-    let idx: number
-    while ((idx = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, idx).trim()
-      buf = buf.slice(idx + 1)
-      if (!line.startsWith('data:')) continue
-      const payload = line.slice(5).trim()
-      if (payload === '[DONE]') continue
-      try {
-        const j = JSON.parse(payload) as {
-          choices?: { delta?: { content?: string } }[]
-          usage?: { completion_tokens?: number }
-        }
-        const delta = j.choices?.[0]?.delta?.content
-        if (delta) {
-          if (ttft === null) ttft = performance.now() - t0
-          text += delta
-        }
-        if (j.usage?.completion_tokens) completionTokens = j.usage.completion_tokens
-      } catch {
-        // ignore malformed chunk
-      }
-    }
+  let text = ''
+  for await (const chunk of result.textStream) {
+    if (ttft === null) ttft = performance.now() - t0
+    text += chunk
   }
   if (!text) throw new Error('流式响应为空')
-  return { text, completionTokens, ttft }
+  const usage = await result.usage
+  return { text, completionTokens: usage?.outputTokens ?? null, ttft }
 }
 
 function estimateTokens(s: string): number {
@@ -345,7 +330,7 @@ export default function TranslateLab() {
           let tps: number | null = null
           try {
             const t0 = performance.now()
-            const sr = await callChatStream(m.provider, m.model, content)
+            const sr = await callChatStream(m.provider, m.model, content, settings.reasoning)
             const total = performance.now() - t0
             translation = sr.text
             ttft = sr.ttft
@@ -353,7 +338,7 @@ export default function TranslateLab() {
             const genMs = ttft !== null ? Math.max(total - ttft, 1) : total
             tps = Math.round((tokens * 1000) / genMs)
           } catch {
-            translation = await callChat(m.provider, m.model, content)
+            translation = await callChat(m.provider, m.model, content, settings.reasoning)
           }
           patchResult(m.key, { translation, ttft, tps, status: judge ? 'judging' : 'done' })
           return { id, key: m.key, model: m.model, translation }
@@ -372,7 +357,7 @@ export default function TranslateLab() {
           .replace('{source}', settings.text)
           .replace('{translations}', block)
         try {
-          const out = await callChat(judge.provider, judge.model, content)
+          const out = await callChat(judge.provider, judge.model, content, settings.reasoning)
           const byId = new Map(parseJudgeJson(out).map((e) => [String(e.id), e]))
           for (const o of doneOnes) {
             const e = byId.get(o.id)
@@ -578,6 +563,19 @@ export default function TranslateLab() {
               )}
             </div>
           </div>
+          <label>
+            <span className={labelCls}>思考等级（reasoning effort，取决于提供商/模型支持）</span>
+            <select
+              className={`${inputCls} w-full`}
+              value={settings.reasoning}
+              onChange={(e) => setSettings((s) => ({ ...s, reasoning: e.target.value }))}
+            >
+              <option value="">默认</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </label>
           <button
             className="h-9 rounded-md bg-indigo-600 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
             disabled={running || settings.selected.length === 0 || !settings.text.trim()}

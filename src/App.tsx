@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import CompareView from './components/CompareView'
 import FeatureMatrix from './components/FeatureMatrix'
 import FontModal from './components/FontModal'
 import TopBar from './components/TopBar'
-import TranslateLab from './components/TranslateLab'
+
+const TranslateLab = lazy(() => import('./components/TranslateLab'))
 import { DEFAULT_SETTINGS, GOOGLE_FONT_MAP, defaultPairs, uid } from './data'
 import type { FontFeatureResult } from './detect'
 import { fontAvailable, loadFontResource, loadGoogleFont, removeInjectedFont, restoreFont } from './fontUtils'
@@ -226,7 +227,14 @@ export default function App() {
                 />
               }
             />
-            <Route path="/translate" element={<TranslateLab />} />
+            <Route
+              path="/translate"
+              element={
+                <Suspense fallback={<div className="py-10 text-center text-sm text-zinc-400">加载中…</div>}>
+                  <TranslateLab />
+                </Suspense>
+              }
+            />
           </Routes>
         </div>
 
