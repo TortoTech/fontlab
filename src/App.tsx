@@ -4,6 +4,7 @@ import CompareView from './components/CompareView'
 import FeatureMatrix from './components/FeatureMatrix'
 import FontModal from './components/FontModal'
 import TopBar from './components/TopBar'
+import TranslateLab from './components/TranslateLab'
 import { DEFAULT_SETTINGS, GOOGLE_FONT_MAP, defaultPairs, uid } from './data'
 import type { FontFeatureResult } from './detect'
 import { fontAvailable, loadFontResource, loadGoogleFont, removeInjectedFont, restoreFont } from './fontUtils'
@@ -225,6 +226,7 @@ export default function App() {
                 />
               }
             />
+            <Route path="/translate" element={<TranslateLab />} />
           </Routes>
         </div>
 
