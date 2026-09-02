@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { jsonrepair } from 'jsonrepair'
 import { uid } from '../data'
 
 interface Provider {
@@ -11,11 +12,13 @@ interface Provider {
 
 interface ResultItem {
   key: string
+  id: string
   providerName: string
   model: string
   translation: string
   judge: string
   score: number | null
+  follow: number | null
   status: 'pending' | 'translating' | 'judging' | 'done' | 'error'
   error?: string
 }
@@ -26,7 +29,8 @@ const SETTINGS_KEY = 'tortolab-translate-settings-v1'
 const DEFAULT_PROMPT =
   '请将下面的文本翻译成英文。要求：忠实原意、表达流畅、保留原文风格。只输出译文，不要附加解释。'
 
-const DEFAULT_JUDGE_PROMPT = `你是一位资深译审。请评估下面「译文」相对「原文」的翻译质量。
+const LEGACY_JUDGE_PROMPTS = [
+  `你是一位资深译审。请评估下面「译文」相对「原文」的翻译质量。
 
 原文：
 {source}
@@ -37,7 +41,45 @@ const DEFAULT_JUDGE_PROMPT = `你是一位资深译审。请评估下面「译�
 按 1-10 分打分（信达雅综合），并给出不超过 100 字的评语。
 严格按以下格式输出：
 分数: <数字>
-评语: <评语>`
+评语: <评语>`,
+  `你是一位资深译审。请评估「译文」相对「原文」的翻译质量，并检查译文是否遵循「翻译要求」。
+
+翻译要求：
+{prompt}
+
+原文：
+{source}
+
+译文：
+{translation}
+
+按 1-10 分打分：
+- 质量分：信达雅综合水平
+- 遵循分：对翻译要求的遵循程度（风格、格式、约束等）
+
+严格按以下格式输出：
+质量分: <数字>
+遵循分: <数字>
+评语: <不超过 100 字的评语>`,
+]
+
+const DEFAULT_JUDGE_PROMPT = `你是一位资深译审。请逐条评估各译文相对「原文」的翻译质量，并检查是否遵循「翻译要求」。
+
+翻译要求：
+{prompt}
+
+原文：
+{source}
+
+译文：
+{translations}
+
+每条译文按 1-10 分打分：
+- quality：信达雅综合水平
+- follow：对翻译要求的遵循程度（风格、格式、约束等）
+
+只输出 JSON 数组，不要输出任何其他内容：
+[{"id": "<译文编号，如 T1>", "quality": <数字>, "follow": <数字>, "comment": "<不超过 50 字的评语>"}]`
 
 interface Settings {
   prompt: string
@@ -63,6 +105,12 @@ function load<T>(key: string, fallback: T): T {
     // ignore
   }
   return fallback
+}
+
+function loadSettings(): Settings {
+  const s = load(SETTINGS_KEY, DEFAULT_SETTINGS)
+  if (LEGACY_JUDGE_PROMPTS.includes(s.judgePrompt)) s.judgePrompt = DEFAULT_JUDGE_PROMPT
+  return s
 }
 
 function loadProviders(): Provider[] {
@@ -95,11 +143,44 @@ async function listModels(p: Provider): Promise<string[]> {
   return (data.data ?? []).map((d) => d.id).sort((a, b) => a.localeCompare(b))
 }
 
-function parseScore(text: string): number | null {
-  const m = text.match(/分数\s*[:：]\s*([\d.]+)/)
-  if (!m) return null
-  const n = Number(m[1])
-  return Number.isFinite(n) ? n : null
+interface JudgeEntry {
+  id?: string | number
+  quality?: number | string
+  follow?: number | string
+  comment?: string
+}
+
+function parseJudgeJson(text: string): JudgeEntry[] {
+  const tryParse = (t: string): JudgeEntry[] => {
+    const data: unknown = JSON.parse(jsonrepair(t))
+    if (Array.isArray(data)) return data as JudgeEntry[]
+    if (data && typeof data === 'object') {
+      const wrapped = (data as Record<string, unknown>).results
+      if (Array.isArray(wrapped)) return wrapped as JudgeEntry[]
+    }
+    return []
+  }
+  try {
+    const r = tryParse(text)
+    if (r.length) return r
+  } catch {
+    // fallthrough to slice
+  }
+  const s = text.indexOf('[')
+  const e = text.lastIndexOf(']')
+  if (s >= 0 && e > s) {
+    try {
+      return tryParse(text.slice(s, e + 1))
+    } catch {
+      // ignore
+    }
+  }
+  return []
+}
+
+const toNum = (v: unknown): number | null => {
+  const n = Number(v)
+  return v !== undefined && v !== null && v !== '' && Number.isFinite(n) ? n : null
 }
 
 const inputCls =
@@ -111,13 +192,15 @@ const cardCls = 'rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc
 
 export default function TranslateLab() {
   const [providers, setProviders] = useState<Provider[]>(loadProviders)
-  const [settings, setSettings] = useState<Settings>(() => load(SETTINGS_KEY, DEFAULT_SETTINGS))
+  const [settings, setSettings] = useState<Settings>(loadSettings)
   const [results, setResults] = useState<ResultItem[]>([])
   const [running, setRunning] = useState(false)
   const [showProviders, setShowProviders] = useState(providers.length === 0)
   const [fetching, setFetching] = useState<Set<string>>(new Set())
   const [fetchErr, setFetchErr] = useState<Record<string, string>>({})
   const [modelQuery, setModelQuery] = useState('')
+  const [judgeOpen, setJudgeOpen] = useState(false)
+  const [judgeQuery, setJudgeQuery] = useState('')
 
   useEffect(() => {
     localStorage.setItem(PROVIDERS_KEY, JSON.stringify(providers))
@@ -168,34 +251,59 @@ export default function TranslateLab() {
     if (picks.length === 0 || !settings.text.trim()) return
     setRunning(true)
     setResults(
-      picks.map((m) => ({
+      picks.map((m, i) => ({
         key: m.key,
+        id: `T${i + 1}`,
         providerName: m.provider.name,
         model: m.model,
         translation: '',
         judge: '',
         score: null,
-        status: 'pending',
+        follow: null,
+        status: 'pending' as const,
       })),
     )
-    await Promise.all(
-      picks.map(async (m) => {
+    const outcomes: { id: string; key: string; model: string; translation: string | null }[] = await Promise.all(
+      picks.map(async (m, i) => {
+        const id = `T${i + 1}`
         try {
           patchResult(m.key, { status: 'translating' })
           const translation = await callChat(m.provider, m.model, settings.prompt + '\n\n' + settings.text)
           patchResult(m.key, { translation, status: judge ? 'judging' : 'done' })
-          if (!judge) return
-          const judgeOut = await callChat(
-            judge.provider,
-            judge.model,
-            settings.judgePrompt.replace('{source}', settings.text).replace('{translation}', translation),
-          )
-          patchResult(m.key, { judge: judgeOut, score: parseScore(judgeOut), status: 'done' })
+          return { id, key: m.key, model: m.model, translation }
         } catch (err) {
           patchResult(m.key, { status: 'error', error: err instanceof Error ? err.message : String(err) })
+          return { id, key: m.key, model: m.model, translation: null }
         }
       }),
     )
+    if (judge) {
+      const doneOnes = outcomes.filter((o) => o.translation !== null)
+      if (doneOnes.length > 0) {
+        const block = doneOnes.map((o) => `${o.id}（模型：${o.model}）:\n${o.translation}`).join('\n\n')
+        const content = settings.judgePrompt
+          .replace('{prompt}', settings.prompt)
+          .replace('{source}', settings.text)
+          .replace('{translations}', block)
+        try {
+          const out = await callChat(judge.provider, judge.model, content)
+          const byId = new Map(parseJudgeJson(out).map((e) => [String(e.id), e]))
+          for (const o of doneOnes) {
+            const e = byId.get(o.id)
+            patchResult(o.key, {
+              status: 'done',
+              score: toNum(e?.quality),
+              follow: toNum(e?.follow),
+              judge: typeof e?.comment === 'string' ? e.comment : '',
+            })
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          for (const o of doneOnes) patchResult(o.key, { status: 'done', error: `裁判失败：${msg}` })
+        }
+        setResults((rs) => rs.map((r) => (r.status === 'judging' ? { ...r, status: 'done' } : r)))
+      }
+    }
     setRunning(false)
   }
 
@@ -283,7 +391,7 @@ export default function TranslateLab() {
           <textarea className={areaCls} rows={4} value={settings.prompt} onChange={(e) => setSettings((s) => ({ ...s, prompt: e.target.value }))} />
         </label>
         <label>
-          <span className={labelCls}>裁判提示词（{'{source}'} / {'{translation}'} 为占位符）</span>
+          <span className={labelCls}>裁判提示词（{'{prompt}'} / {'{source}'} / {'{translations}'} 为占位符，裁判一次请求、JSON 输出）</span>
           <textarea className={areaCls} rows={4} value={settings.judgePrompt} onChange={(e) => setSettings((s) => ({ ...s, judgePrompt: e.target.value }))} />
         </label>
         <label className="lg:col-span-2">
@@ -332,17 +440,56 @@ export default function TranslateLab() {
           </div>
         </div>
         <div className="flex flex-col justify-end gap-2">
-          <label>
-            <span className={labelCls}>裁判模型</span>
-            <select className={`${inputCls} w-full`} value={settings.judgeKey} onChange={(e) => setSettings((s) => ({ ...s, judgeKey: e.target.value }))}>
-              <option value="">不裁判</option>
-              {allModels.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.provider.name} / {m.model}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div>
+            <span className={labelCls}>裁判模型（输入可搜索）</span>
+            <div className="relative">
+              <input
+                className={`${inputCls} w-full`}
+                placeholder="不裁判（输入以搜索模型）"
+                value={judgeOpen ? judgeQuery : (() => { const j = findModel(settings.judgeKey); return j ? `${j.provider.name} / ${j.model}` : '' })()}
+                onFocus={() => {
+                  setJudgeOpen(true)
+                  setJudgeQuery('')
+                }}
+                onChange={(e) => {
+                  setJudgeQuery(e.target.value)
+                  setJudgeOpen(true)
+                }}
+              />
+              {judgeOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setJudgeOpen(false)} />
+                  <div className="absolute left-0 top-9 z-30 max-h-56 w-full overflow-y-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                    <button
+                      className="block w-full rounded px-2 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      onClick={() => {
+                        setSettings((s) => ({ ...s, judgeKey: '' }))
+                        setJudgeOpen(false)
+                      }}
+                    >
+                      不裁判
+                    </button>
+                    {allModels
+                      .filter((m) =>
+                        `${m.provider.name} ${m.model}`.toLowerCase().includes(judgeQuery.trim().toLowerCase()),
+                      )
+                      .map((m) => (
+                        <button
+                          key={m.key}
+                          className="block w-full truncate rounded px-2 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                          onClick={() => {
+                            setSettings((s) => ({ ...s, judgeKey: m.key }))
+                            setJudgeOpen(false)
+                          }}
+                        >
+                          {m.provider.name} / {m.model}
+                        </button>
+                      ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
           <button
             className="h-9 rounded-md bg-indigo-600 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
             disabled={running || settings.selected.length === 0 || !settings.text.trim()}
@@ -363,13 +510,18 @@ export default function TranslateLab() {
                 </span>
                 {r.score !== null && (
                   <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-semibold text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
-                    {r.score} 分
+                    质量 {r.score}
+                  </span>
+                )}
+                {r.follow !== null && (
+                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                    遵循 {r.follow}
                   </span>
                 )}
                 <span className="ml-auto text-xs text-zinc-400">
                   {r.status === 'translating' && '翻译中…'}
                   {r.status === 'judging' && '裁判中…'}
-                  {r.status === 'done' && '完成'}
+                  {r.status === 'done' && (r.error ?? '完成')}
                   {r.status === 'error' && `失败：${r.error}`}
                 </span>
               </div>
