@@ -393,7 +393,9 @@ export default function TranslateLab() {
     setRunning(false)
   }
 
-  const sorted = [...results].sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+  const sorted = [...results].sort(
+    (a, b) => a.model.localeCompare(b.model) || a.providerName.localeCompare(b.providerName),
+  )
 
   return (
     <div className="flex flex-col gap-4">
