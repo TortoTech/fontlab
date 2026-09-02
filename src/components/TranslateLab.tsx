@@ -350,7 +350,8 @@ export default function TranslateLab() {
             translation = sr.text
             ttft = sr.ttft
             const tokens = sr.completionTokens ?? estimateTokens(translation)
-            tps = total > 0 ? Math.round((tokens * 1000) / total) : null
+            const genMs = ttft !== null ? Math.max(total - ttft, 1) : total
+            tps = Math.round((tokens * 1000) / genMs)
           } catch {
             translation = await callChat(m.provider, m.model, content)
           }
@@ -606,7 +607,7 @@ export default function TranslateLab() {
                 {(r.ttft !== null || r.tps !== null) && (
                   <span
                     className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 tabular-nums dark:bg-zinc-800 dark:text-zinc-400"
-                    title="首字耗时 / 生成速度（无 usage 时按字符估算 token）"
+                    title="首字耗时 / 生成速度（输出 token ÷（完成 − 首字）；无 usage 时按字符估算 token）"
                   >
                     {r.ttft !== null ? `首字 ${(r.ttft / 1000).toFixed(2)}s` : ''}
                     {r.ttft !== null && r.tps !== null ? ' · ' : ''}
