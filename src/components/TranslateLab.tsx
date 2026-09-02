@@ -19,6 +19,8 @@ interface ResultItem {
   judge: string
   score: number | null
   follow: number | null
+  ttft: number | null
+  tps: number | null
   status: 'pending' | 'translating' | 'judging' | 'done' | 'error'
   error?: string
 }
@@ -133,6 +135,73 @@ async function callChat(p: Provider, model: string, content: string): Promise<st
   if (!res.ok) throw new Error(`HTTP ${res.status}：${(await res.text()).slice(0, 200)}`)
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
   return data.choices?.[0]?.message?.content ?? ''
+}
+
+interface StreamResult {
+  text: string
+  completionTokens: number | null
+  ttft: number | null
+}
+
+async function callChatStream(p: Provider, model: string, content: string): Promise<StreamResult> {
+  const url = p.baseURL.replace(/\/+$/, '') + '/chat/completions'
+  const t0 = performance.now()
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${p.apiKey}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content }],
+      stream: true,
+      stream_options: { include_usage: true },
+    }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}：${(await res.text()).slice(0, 200)}`)
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('不支持流式读取')
+  const decoder = new TextDecoder()
+  let buf = ''
+  let text = ''
+  let ttft: number | null = null
+  let completionTokens: number | null = null
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    let idx: number
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).trim()
+      buf = buf.slice(idx + 1)
+      if (!line.startsWith('data:')) continue
+      const payload = line.slice(5).trim()
+      if (payload === '[DONE]') continue
+      try {
+        const j = JSON.parse(payload) as {
+          choices?: { delta?: { content?: string } }[]
+          usage?: { completion_tokens?: number }
+        }
+        const delta = j.choices?.[0]?.delta?.content
+        if (delta) {
+          if (ttft === null) ttft = performance.now() - t0
+          text += delta
+        }
+        if (j.usage?.completion_tokens) completionTokens = j.usage.completion_tokens
+      } catch {
+        // ignore malformed chunk
+      }
+    }
+  }
+  if (!text) throw new Error('流式响应为空')
+  return { text, completionTokens, ttft }
+}
+
+function estimateTokens(s: string): number {
+  let cjk = 0
+  for (const ch of s) {
+    const cp = ch.codePointAt(0) ?? 0
+    if (cp >= 0x3000 && cp <= 0x9fff) cjk++
+  }
+  return Math.max(1, Math.round(cjk + (s.length - cjk) / 4))
 }
 
 async function listModels(p: Provider): Promise<string[]> {
@@ -260,6 +329,8 @@ export default function TranslateLab() {
         judge: '',
         score: null,
         follow: null,
+        ttft: null,
+        tps: null,
         status: 'pending' as const,
       })),
     )
@@ -268,8 +339,22 @@ export default function TranslateLab() {
         const id = `T${i + 1}`
         try {
           patchResult(m.key, { status: 'translating' })
-          const translation = await callChat(m.provider, m.model, settings.prompt + '\n\n' + settings.text)
-          patchResult(m.key, { translation, status: judge ? 'judging' : 'done' })
+          const content = settings.prompt + '\n\n' + settings.text
+          let translation: string
+          let ttft: number | null = null
+          let tps: number | null = null
+          try {
+            const t0 = performance.now()
+            const sr = await callChatStream(m.provider, m.model, content)
+            const total = performance.now() - t0
+            translation = sr.text
+            ttft = sr.ttft
+            const tokens = sr.completionTokens ?? estimateTokens(translation)
+            tps = total > 0 ? Math.round((tokens * 1000) / total) : null
+          } catch {
+            translation = await callChat(m.provider, m.model, content)
+          }
+          patchResult(m.key, { translation, ttft, tps, status: judge ? 'judging' : 'done' })
           return { id, key: m.key, model: m.model, translation }
         } catch (err) {
           patchResult(m.key, { status: 'error', error: err instanceof Error ? err.message : String(err) })
@@ -516,6 +601,16 @@ export default function TranslateLab() {
                 {r.follow !== null && (
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
                     遵循 {r.follow}
+                  </span>
+                )}
+                {(r.ttft !== null || r.tps !== null) && (
+                  <span
+                    className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 tabular-nums dark:bg-zinc-800 dark:text-zinc-400"
+                    title="首字耗时 / 生成速度（无 usage 时按字符估算 token）"
+                  >
+                    {r.ttft !== null ? `首字 ${(r.ttft / 1000).toFixed(2)}s` : ''}
+                    {r.ttft !== null && r.tps !== null ? ' · ' : ''}
+                    {r.tps !== null ? `${r.tps} tok/s` : ''}
                   </span>
                 )}
                 <span className="ml-auto text-xs text-zinc-400">
