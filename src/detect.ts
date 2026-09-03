@@ -101,30 +101,26 @@ function styleHeuristic(family: string, kind: 'bold' | 'italic'): TriState {
   return samePixels(base, test) ? 'no' : 'maybe'
 }
 
-let figSpan: HTMLSpanElement | null = null
-
-function figuresWidth(family: string, variant: 'normal' | 'lining' | 'oldstyle'): number {
-  if (!figSpan) {
-    figSpan = document.createElement('span')
-    figSpan.style.cssText =
-      'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;font-size:48px;'
-    figSpan.textContent = '0123456789'
-    document.body.appendChild(figSpan)
-  }
-  figSpan.style.fontFamily = `"${family}"`
-  figSpan.style.fontVariantNumeric =
-    variant === 'normal' ? 'normal' : variant === 'lining' ? 'lining-nums' : 'oldstyle-nums'
-  return figSpan.getBoundingClientRect().width
+function figureDefaultStyle(family: string): 'lining' | 'oldstyle' | 'unknown' {
+  const c = getCtx()
+  if (!c) return 'unknown'
+  const size = 48
+  c.font = `${size}px "${family}"`
+  const dig = c.measureText('0123456789')
+  const capA = c.measureText('H').actualBoundingBoxAscent
+  const xA = c.measureText('x').actualBoundingBoxAscent
+  if (!capA || !xA || !dig.actualBoundingBoxAscent) return 'unknown'
+  if (dig.actualBoundingBoxDescent > size * 0.08) return 'oldstyle'
+  return dig.actualBoundingBoxAscent < (xA + capA) / 2 ? 'oldstyle' : 'lining'
 }
 
 export function detectFigures(family: string): FiguresInfo {
-  const wN = figuresWidth(family, 'normal')
-  const wL = figuresWidth(family, 'lining')
-  const wO = figuresWidth(family, 'oldstyle')
+  const t = '0123456789'
+  const wL = featWidth(family, '"lnum"', t)
+  const wO = featWidth(family, '"onum"', t)
   const eps = 0.01
   const hasOnum = Math.abs(wL - wO) > eps
-  const defOld = Math.abs(wN - wL) > eps
-  return { def: defOld ? 'oldstyle' : 'lining', onum: hasOnum ? 'yes' : 'no' }
+  return { def: figureDefaultStyle(family), onum: hasOnum ? 'yes' : 'no' }
 }
 
 let featSpan: HTMLSpanElement | null = null
