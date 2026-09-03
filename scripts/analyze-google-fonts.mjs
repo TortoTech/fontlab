@@ -104,6 +104,14 @@ writeFileSync(
   outPath,
   JSON.stringify({ generated: new Date().toISOString().slice(0, 10), count: Object.keys(results).length, fonts: results }),
 )
+const filesMap = {}
+for (const it of items) {
+  if (it.files && Object.keys(it.files).length) filesMap[it.family.toLowerCase()] = it.files
+}
+writeFileSync(
+  join(dirname(outPath), 'google-fonts-files.json'),
+  JSON.stringify({ generated: new Date().toISOString().slice(0, 10), files: filesMap }),
+)
 console.log(
   '[analyze-google-fonts] 完成：解析 ' +
     Object.keys(results).length +

@@ -8,6 +8,7 @@ import { detectFont } from '../detect'
 import type { FontFeatureResult, TriState } from '../detect'
 import { analyzeLocalFont, LOCAL_CURATED_FAMILIES, queryLocalFonts } from '../localFonts'
 import type { LocalFontAnalysis, LocalFontInfo } from '../localFonts'
+import { downloadFamilyZip, officialDownloadUrl } from '../downloads'
 import type { CustomFont, FontSource } from '../types'
 
 interface Props {
@@ -284,6 +285,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   const [sortBy, setSortBy] = useState<'default' | 'popularity'>('default')
   const [limit, setLimit] = useState(PAGE_SIZE)
   const [loading, setLoading] = useState<Set<string>>(new Set())
+  const [downloading, setDownloading] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<string | null>(null)
   const [localInfo, setLocalInfo] = useState<Map<string, LocalFontInfo> | null>(null)
   const [localAnalysis, setLocalAnalysis] = useState<Map<string, LocalFontAnalysis>>(() => new Map())
@@ -462,6 +464,22 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
   const visible = filtered.slice(0, limit)
   const unavailableCount = rows.filter((r) => !r.available).length
 
+  const handleDownload = async (family: string) => {
+    setDownloading((s) => new Set(s).add(family))
+    try {
+      const ok = await downloadFamilyZip(family)
+      if (!ok) window.open(officialDownloadUrl(family), '_blank', 'noopener')
+    } catch {
+      window.open(officialDownloadUrl(family), '_blank', 'noopener')
+    } finally {
+      setDownloading((s) => {
+        const n = new Set(s)
+        n.delete(family)
+        return n
+      })
+    }
+  }
+
   const handleLoad = async (family: string) => {
     const entry = catalogMap.get(family.toLowerCase())
     setLoading((s) => new Set(s).add(family))
@@ -478,7 +496,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
     'h-8 rounded-md border border-zinc-300 bg-white px-2 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100'
 
   return (
-    <div className="flex h-[calc(100vh-5.5rem)] flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <input
           className={`${inputCls} w-56`}
@@ -619,15 +637,14 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                     <td className="px-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {r.source === 'google' && (
-                          <a
-                            className="inline-flex h-7 items-center rounded-md border border-zinc-300 px-2.5 text-xs text-zinc-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
-                            href={`https://fonts.google.com/download?family=${encodeURIComponent(r.family)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="下载 Windows 可安装字体包（ttf zip）"
+                          <button
+                            className="inline-flex h-7 items-center rounded-md border border-zinc-300 px-2.5 text-xs text-zinc-600 hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+                            disabled={downloading.has(r.family)}
+                            onClick={() => void handleDownload(r.family)}
+                            title="在当前页打包下载可安装字体（ttf zip）"
                           >
-                            下载
-                          </a>
+                            {downloading.has(r.family) ? '打包中…' : '下载'}
+                          </button>
                         )}
                         {r.available ? (
                           <button

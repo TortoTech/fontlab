@@ -209,10 +209,10 @@ export default function App() {
 
   return (
     <HashRouter>
-      <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         <TopBar onAddFont={() => setModalOpen(true)} onReset={reset} />
 
-        <div className="mx-auto max-w-[1600px] px-4 py-4">
+        <div className="mx-auto w-full max-w-[1600px] flex-1 min-h-0 px-4 py-4">
           <Routes>
             <Route
               path="/"

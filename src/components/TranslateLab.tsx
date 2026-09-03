@@ -531,6 +531,12 @@ export default function TranslateLab() {
                   setJudgeOpen(true)
                   setJudgeQuery('')
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setJudgeOpen(false)
+                    setJudgeQuery('')
+                  }
+                }}
                 onChange={(e) => {
                   setJudgeQuery(e.target.value)
                   setJudgeOpen(true)

@@ -40,7 +40,7 @@ export default function FontSelect({ label, value, allowNone, customFonts, extra
   }
 
   return (
-    <label className="flex min-w-0 flex-col gap-1" data-tick={fontTick}>
+    <div className="flex min-w-0 flex-col gap-1" data-tick={fontTick}>
       <span className="text-xs text-zinc-500 dark:text-zinc-400">{label}</span>
       <div className="relative">
         <input
@@ -50,6 +50,12 @@ export default function FontSelect({ label, value, allowNone, customFonts, extra
           onFocus={() => {
             setOpen(true)
             setQ('')
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setOpen(false)
+              setQ('')
+            }
           }}
           onChange={(e) => {
             setQ(e.target.value)
@@ -93,6 +99,6 @@ export default function FontSelect({ label, value, allowNone, customFonts, extra
           </>
         )}
       </div>
-    </label>
+    </div>
   )
 }
