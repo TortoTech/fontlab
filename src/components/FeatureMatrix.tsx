@@ -478,8 +478,8 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
     'h-8 rounded-md border border-zinc-300 bg-white px-2 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100'
 
   return (
-    <div>
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+    <div className="flex h-[calc(100vh-5.5rem)] flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <input
           className={`${inputCls} w-56`}
           placeholder="搜索字体名称…"
@@ -542,7 +542,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
         </span>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
         <span>
           <b className="text-emerald-600 dark:text-emerald-400">✓</b> 支持（有真实字形）
         </span>
@@ -564,7 +564,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
         </span>
       </div>
 
-      <div className="max-h-[75vh] overflow-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <table className="w-full border-collapse text-sm" style={{ minWidth: 320 + activeCols.length * 76 }}>
           <thead>
             <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
@@ -683,7 +683,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
       </div>
 
       {filtered.length > limit && (
-        <div className="mt-3 text-center">
+        <div className="text-center">
           <button
             className="h-8 rounded-md border border-zinc-300 bg-white px-4 text-sm text-zinc-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
             onClick={() => setLimit((l) => l + PAGE_SIZE)}
@@ -692,13 +692,6 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
           </button>
         </div>
       )}
-
-      <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
-        检测说明：已加载字体按实际字形检测；未加载的 Google Fonts
-        字体按官方目录元数据推断（粗体/斜体看变体，中文看子集覆盖，等宽看分类）；「热度」为 Google Fonts
-        全球使用热度排名。本地字体在支持的浏览器（Chrome/Edge）授权后经 Local Font Access
-        API 精确检测（真实字重/斜体 + 解析字形表判断中文覆盖），不支持或未授权时自动回退到渲染启发式。
-      </p>
     </div>
   )
 }

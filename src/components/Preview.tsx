@@ -64,9 +64,9 @@ export default function Preview({ pair, settings, sample }: Props) {
       {sample.code && (
         <pre
           className="mt-4 overflow-x-auto rounded-md bg-zinc-100 p-3 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-          style={{ fontFamily: mono, fontSize: base * 0.85, lineHeight: 1.6 }}
+          style={{ fontSize: base * 0.85, lineHeight: 1.6 }}
         >
-          <code>{sample.code}</code>
+          <code style={{ fontFamily: mono }}>{sample.code}</code>
         </pre>
       )}
       {sample.caption && (
