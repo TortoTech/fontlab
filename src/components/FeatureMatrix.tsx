@@ -568,7 +568,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
         <table className="w-full border-collapse text-sm" style={{ minWidth: 320 + activeCols.length * 76 }}>
           <thead>
             <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
-              <th className={`${TH_STICKY} left-0 z-20 px-3 font-medium`}>字体</th>
+              <th className={`${TH_STICKY} left-0 z-20 w-72 max-w-72 px-3 font-medium`}>字体</th>
               {activeCols.map((c) => (
                 <th key={c.key} className={`${TH_STICKY} px-2 font-medium ${c.center ? 'text-center' : ''}`}>
                   {c.label}
@@ -589,7 +589,7 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                       r.available ? '' : 'opacity-70'
                     } ${isOpen ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''}`}
                   >
-                    <td className={`${TD_STICKY} px-3 py-2`}>
+                    <td className={`${TD_STICKY} max-w-72 px-3 py-2`}>
                       <div className="flex items-center gap-3">
                         <span
                           className="w-28 shrink-0 truncate text-lg text-zinc-800 dark:text-zinc-200"
@@ -617,27 +617,40 @@ export default function FeatureMatrix({ customFonts, fontTick, loadGoogle, onUse
                       <Cell key={c.key} col={c} r={r} cat={cat ?? undefined} />
                     ))}
                     <td className="px-3 text-right">
-                      {r.available ? (
-                        <button
-                          className="h-7 rounded-md border border-zinc-300 px-2.5 text-xs text-zinc-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
-                          onClick={() => {
-                            onUseFont(r)
-                            navigate('/')
-                          }}
-                        >
-                        对比
-                      </button>
-                      ) : r.source === 'google' ? (
-                        <button
-                          className="h-7 rounded-md bg-indigo-600 px-2.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
-                          disabled={loading.has(r.family)}
-                          onClick={() => handleLoad(r.family)}
-                        >
-                          {loading.has(r.family) ? '加载中…' : '加载'}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-zinc-300 dark:text-zinc-600">未安装</span>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {r.source === 'google' && (
+                          <a
+                            className="inline-flex h-7 items-center rounded-md border border-zinc-300 px-2.5 text-xs text-zinc-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+                            href={`https://fonts.google.com/download?family=${encodeURIComponent(r.family)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="下载 Windows 可安装字体包（ttf zip）"
+                          >
+                            下载
+                          </a>
+                        )}
+                        {r.available ? (
+                          <button
+                            className="h-7 rounded-md border border-zinc-300 px-2.5 text-xs text-zinc-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+                            onClick={() => {
+                              onUseFont(r)
+                              navigate('/')
+                            }}
+                          >
+                            对比
+                          </button>
+                        ) : r.source === 'google' ? (
+                          <button
+                            className="h-7 rounded-md bg-indigo-600 px-2.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
+                            disabled={loading.has(r.family)}
+                            onClick={() => handleLoad(r.family)}
+                          >
+                            {loading.has(r.family) ? '加载中…' : '加载'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-zinc-300 dark:text-zinc-600">未安装</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   {isOpen && cat && (
