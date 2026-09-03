@@ -7,6 +7,7 @@ interface Props {
   settings: Settings
   pairs: FontPair[]
   customFonts: CustomFont[]
+  extraFonts: string[]
   fontTick: number
   onPatchSettings: (patch: Partial<Settings>) => void
   onPatchPair: (id: string, patch: Partial<FontPair>) => void
@@ -20,6 +21,7 @@ export default function CompareView({
   settings,
   pairs,
   customFonts,
+  extraFonts,
   fontTick,
   onPatchSettings,
   onPatchPair,
@@ -72,6 +74,7 @@ export default function CompareView({
             settings={settings}
             sample={sample}
             customFonts={customFonts.map((f) => f.name)}
+            extraFonts={extraFonts}
             fontTick={fontTick}
             onChange={(patch) => onPatchPair(pair.id, patch)}
             onDelete={() => onDelete(pair.id)}

@@ -9,6 +9,7 @@ interface Props {
   settings: Settings
   sample: Sample
   customFonts: string[]
+  extraFonts: string[]
   fontTick: number
   onChange: (patch: Partial<FontPair>) => void
   onDelete: () => void
@@ -48,6 +49,7 @@ export default function PairCard({
   settings,
   sample,
   customFonts,
+  extraFonts,
   fontTick,
   onChange,
   onDelete,
@@ -57,7 +59,7 @@ export default function PairCard({
   const btn =
     'h-7 rounded-md border border-zinc-300 bg-white px-2.5 text-xs text-zinc-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400'
 
-  const selectProps = { customFonts, fontTick }
+  const selectProps = { customFonts, extraFonts, fontTick }
 
   return (
     <article className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

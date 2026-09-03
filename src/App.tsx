@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, lazy, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import CompareView from './components/CompareView'
 import FeatureMatrix from './components/FeatureMatrix'
@@ -7,6 +7,8 @@ import TopBar from './components/TopBar'
 
 const TranslateLab = lazy(() => import('./components/TranslateLab'))
 import { DEFAULT_SETTINGS, GOOGLE_FONT_MAP, defaultPairs, uid } from './data'
+import { css2Query, loadCatalog } from './catalog'
+import type { CatalogFont } from './catalog'
 import type { FontFeatureResult } from './detect'
 import { fontAvailable, loadFontResource, loadGoogleFont, removeInjectedFont, restoreFont } from './fontUtils'
 import type { CustomFont, FontPair, Settings } from './types'
@@ -45,8 +47,22 @@ export default function App() {
 
   const { settings, pairs, customFonts } = state
 
+  const [catalog, setCatalog] = useState<CatalogFont[]>([])
+  useEffect(() => {
+    let alive = true
+    loadCatalog().then((c) => {
+      if (alive) setCatalog(c?.fonts ?? [])
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+  const catalogMap = useMemo(() => new Map(catalog.map((f) => [f.f.toLowerCase(), f])), [catalog])
+  const catalogFamilies = useMemo(() => catalog.map((f) => f.f), [catalog])
+
   const ensureGoogleFont = async (family: string, opts?: { force?: boolean; silent?: boolean }) => {
-    const query = GOOGLE_FONT_MAP.get(family)
+    const entry = catalogMap.get(family.toLowerCase())
+    const query = GOOGLE_FONT_MAP.get(family) ?? (entry ? css2Query(entry) : undefined)
     if (!query || fontAvailable(family)) return
     if (!opts?.force && googleTried.current.has(family)) return
     googleTried.current.add(family)
@@ -205,6 +221,7 @@ export default function App() {
                   settings={settings}
                   pairs={pairs}
                   customFonts={customFonts}
+                  extraFonts={catalogFamilies}
                   fontTick={fontTick}
                   onPatchSettings={patchSettings}
                   onPatchPair={patchPair}
