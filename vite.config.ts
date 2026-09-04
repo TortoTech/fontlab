@@ -4,6 +4,6 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/fontlab/' : '/',
+  base: command === 'build' ? '/lab/' : '/',
   plugins: [react(), tailwindcss()],
 }))
